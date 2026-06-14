@@ -1,0 +1,25 @@
+{
+  "short_name": "MG Report",
+  "name": "Mutiari Garden Report",
+  "description": "Sistem Report Dokumentasi Mutiari Garden",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#4CAF50",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["business", "productivity"],
+  "lang": "id"
+}

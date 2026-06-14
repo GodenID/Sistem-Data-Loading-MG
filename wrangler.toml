@@ -1,0 +1,9 @@
+# Cloudflare Pages Configuration
+name = "mutiari-garden-report"
+compatibility_date = "2024-01-01"
+
+# Build output directory for Pages
+pages_build_output_dir = "./dist"
+
+# Environment variables
+[env.production]
