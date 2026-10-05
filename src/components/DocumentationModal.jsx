@@ -11,6 +11,7 @@ import { compressMultipleImages, calculateSavings } from '../utils/imageCompress
 import { createMediaItemsFromFiles, formatDuration } from '../utils/media';
 import { useUploadQueue } from '../context/UploadQueueContext';
 import { useAuth } from '../context/AuthContext';
+import CrewPicker from './CrewPicker';
 
 const CONFIG = {
   loading: {
@@ -74,6 +75,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
 
   const [date, setDate] = useState(getTodayDate());
   const [pic, setPic] = useState('');
+  const [crew, setCrew] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [catatan, setCatatan] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,6 +87,8 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
       setDate(getTodayDate());
       // Otomatis isi nama yang login (tetap bisa diubah manual)
       setPic(user?.name || '');
+      // Tim default = diri sendiri (bisa tambah yang lain)
+      setCrew(user ? [{ id: user.id, username: user.username, name: user.name }] : []);
       setPhotos([]);
       setCatatan('');
       setIsSubmitting(false);
@@ -203,6 +207,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
         companyId,
         date,
         pic: pic.trim(),
+        crewIds: crew.map((c) => c.id),
         type,
         catatan: catatan.trim() || null,
       });
@@ -306,6 +311,13 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
                 className={`w-full pl-12 pr-4 py-3.5 rounded-xl bg-white border-2 border-gray-200 text-gray-800 font-medium placeholder:text-gray-400 focus:outline-none ${cfg.borderFocus} transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed`}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Tim Yang Bertugas <span className="text-xs font-normal text-gray-500">(cari nama, bisa banyak)</span>
+            </label>
+            <CrewPicker value={crew} onChange={setCrew} />
           </div>
 
           <div>

@@ -227,6 +227,12 @@ const AdminDashboard = () => {
             description="Akun staff & admin, reset password"
             onClick={() => navigate('/admin/users')}
           />
+          <MenuItem
+            icon={Users}
+            title="Performa Tim"
+            description="Siapa loading berapa kali"
+            onClick={() => navigate('/admin/team')}
+          />
         </div>
 
         {/* Analytics Dashboard - Error Rate & Upload Stats */}

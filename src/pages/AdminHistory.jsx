@@ -29,7 +29,7 @@ import {
 import LoadingDetailModal from '../components/LoadingDetailModal';
 import EditLoadingModal from '../components/EditLoadingModal';
 import AppFooter from '../components/AppFooter';
-import { getLoadingHistory, getLoadingHistorySummary, getCompanies, deleteLoadingHistory, getPhotosByHistoryId } from '../utils/supabase';
+import { getLoadingHistory, getLoadingHistorySummary, getCompanies, deleteLoadingHistory, getPhotosByHistoryId, getTeam } from '../utils/supabase';
 import { deleteMultipleFromS3 } from '../utils/s3Config';
 import { exportToExcel } from '../utils/exportExcel';
 
@@ -46,6 +46,8 @@ const AdminHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
+  const [selectedCrew, setSelectedCrew] = useState('all');
+  const [teamList, setTeamList] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -83,6 +85,7 @@ const AdminHistory = () => {
       sortDir: sortDirection,
     };
     if (selectedCompany !== 'all') f.companyId = parseInt(selectedCompany);
+    if (selectedCrew !== 'all') f.crewUserId = parseInt(selectedCrew);
     if (selectedType !== 'all') f.type = selectedType;
     if (dateFrom) f.dateFrom = dateFrom;
     if (dateTo) f.dateTo = dateTo;
@@ -148,6 +151,11 @@ const AdminHistory = () => {
     } catch (error) {
       console.error('Error fetching companies:', error);
     }
+    try {
+      setTeamList(await getTeam());
+    } catch (error) {
+      console.warn('Error fetching team:', error?.message);
+    }
   };
 
   // Auto-refresh: Refresh data when window regains focus
@@ -203,7 +211,7 @@ const AdminHistory = () => {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedItems(new Set()); // Clear selection on filter change
-  }, [searchQuery, selectedCompany, selectedType, dateFrom, dateTo]);
+  }, [searchQuery, selectedCompany, selectedType, selectedCrew, dateFrom, dateTo]);
 
   // Ringkasan dari query count ringan (bukan dari full-table)
   const totalPhotos = summary.media;
@@ -215,12 +223,13 @@ const AdminHistory = () => {
     setSearchQuery('');
     setSelectedCompany('all');
     setSelectedType('all');
+    setSelectedCrew('all');
     setDateFrom('');
     setDateTo('');
     setSelectedItems(new Set());
   };
 
-  const hasActiveFilters = searchQuery || selectedCompany !== 'all' || selectedType !== 'all' || dateFrom || dateTo;
+  const hasActiveFilters = searchQuery || selectedCompany !== 'all' || selectedType !== 'all' || selectedCrew !== 'all' || dateFrom || dateTo;
 
   // Handle Sort
   const handleSort = (field) => {
@@ -479,6 +488,21 @@ const AdminHistory = () => {
                   <option value="all">Semua Jenis</option>
                   <option value="loading">Loading</option>
                   <option value="perawatan">Perawatan</option>
+                </select>
+              </div>
+
+              {/* Tim Filter */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tim</label>
+                <select
+                  value={selectedCrew}
+                  onChange={(e) => setSelectedCrew(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-garden focus:ring-2 focus:ring-garden/10 bg-white"
+                >
+                  <option value="all">Semua Tim</option>
+                  {teamList.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name || u.username}</option>
+                  ))}
                 </select>
               </div>
 

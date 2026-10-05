@@ -161,6 +161,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
+-- ---------- history_crew (tim per dokumentasi — user berakun) ----------
+CREATE TABLE IF NOT EXISTS history_crew (
+    history_id INTEGER NOT NULL REFERENCES loading_history_reports(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (history_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_history_crew_user_id ON history_crew(user_id);
+
 -- ---------- triggers ----------
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

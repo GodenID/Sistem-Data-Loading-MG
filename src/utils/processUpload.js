@@ -1,5 +1,5 @@
 import { uploadMultipleToS3, deleteFromS3 } from './s3Config';
-import { addLoadingHistory, addPhotos } from './supabase';
+import { addLoadingHistory, addPhotos, setHistoryCrew } from './supabase';
 import { compressMultipleImages } from './imageCompression';
 import { logError, trackUploadAttempt, ERROR_TYPES } from './errorTracking';
 
@@ -15,11 +15,12 @@ import { logError, trackUploadAttempt, ERROR_TYPES } from './errorTracking';
  * @param {string} job.pic
  * @param {'loading'|'perawatan'} job.type
  * @param {string|null} job.catatan
+ * @param {number[]} job.crewIds - id user tim (opsional)
  * @param {(status: 'compressing'|'uploading'|'saving', progress: number) => void} onProgress
  * @returns {Promise<{historyId: number, photoCount: number}>}
  */
 export const processUpload = async (
-  { files, companyId, companyName, date, pic, type, catatan },
+  { files, companyId, companyName, date, pic, type, catatan, crewIds = [] },
   onProgress
 ) => {
   const emit = (status, progress) => {
@@ -94,6 +95,14 @@ export const processUpload = async (
       }));
 
       await addPhotos(photoRecords);
+
+      if (crewIds.length > 0) {
+        try {
+          await setHistoryCrew(savedHistory.id, crewIds);
+        } catch (e) {
+          console.warn('Gagal simpan tim:', e?.message);
+        }
+      }
     } catch (dbError) {
       // Insert gagal (mis. duplikat lolos cek karena race) -> bersihkan
       // file yang sudah terupload agar tidak jadi orphan di S3.

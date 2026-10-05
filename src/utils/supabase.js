@@ -74,6 +74,7 @@ export const getLoadingHistory = async (filters = {}, { page, limit } = {}) => {
     dateTo: filters.dateTo,
     sortBy: filters.sortBy,
     sortDir: filters.sortDir,
+    crewUserId: filters.crewUserId,
     page,
     limit,
   };
@@ -90,6 +91,7 @@ export const getLoadingHistorySummary = async (filters = {}) => {
     type: filters.type,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    crewUserId: filters.crewUserId,
   });
 };
 
@@ -130,6 +132,28 @@ export const deletePhotoRecord = async (photoId) => {
 
 export const getPhotosByHistoryId = async (historyId) => {
   return apiGet(`/api/history/${historyId}/photos`);
+};
+
+// ---------- Tim (crew per dokumentasi) ----------
+
+export const getTeam = async (search = '') => {
+  return apiGet('/api/team', search ? { search } : {});
+};
+
+export const getTeamStats = async () => {
+  return apiGet('/api/team/stats');
+};
+
+export const getMemberHistory = async (userId, limit = 20) => {
+  return apiGet(`/api/team/${userId}/history`, { limit });
+};
+
+export const getHistoryCrew = async (historyId) => {
+  return apiGet(`/api/history/${historyId}/crew`);
+};
+
+export const setHistoryCrew = async (historyId, userIds) => {
+  return apiPost(`/api/history/${historyId}/crew`, { userIds });
 };
 
 // ---------- Statistics ----------

@@ -18,14 +18,16 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/date';
 import { uploadMultipleToS3, deleteFromS3 } from '../utils/s3Config';
-import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, checkLoadingDuplicate } from '../utils/supabase';
+import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, checkLoadingDuplicate, getHistoryCrew, setHistoryCrew } from '../utils/supabase';
 import { createMediaItemsFromFiles, formatDuration, getMediaTypeFromUrl, getMediaUploadSuccessMessage } from '../utils/media';
 import { useAuth } from '../context/AuthContext';
+import CrewPicker from './CrewPicker';
 
 const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const { user } = useAuth();
   const [date, setDate] = useState('');
   const [pic, setPic] = useState('');
+  const [crew, setCrew] = useState([]);
   const [existingPhotos, setExistingPhotos] = useState([]);
   const [newPhotos, setNewPhotos] = useState([]);
   const [photosToDelete, setPhotosToDelete] = useState([]);
@@ -47,8 +49,11 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
       setUploadStatus('');
       setErrorMessage('');
       
-      // Fetch existing photos
+      // Fetch existing photos + tim
       fetchExistingPhotos();
+      getHistoryCrew(loadingData.id)
+        .then(setCrew)
+        .catch(() => setCrew([]));
     }
   }, [isOpen, loadingData]);
 
@@ -207,6 +212,13 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
 
       // Step 5: Update photos in database
       await updatePhotos(loadingData.id, [...existingPhotoRecords, ...newPhotoRecords]);
+
+      // Step 6: Update tim
+      try {
+        await setHistoryCrew(loadingData.id, crew.map((c) => c.id));
+      } catch (e) {
+        console.warn('Gagal simpan tim:', e?.message);
+      }
       setUploadProgress(100);
 
       // Success
@@ -398,6 +410,14 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                 className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white border-2 border-gray-200 text-gray-800 font-medium placeholder:text-gray-400 focus:outline-none focus:border-garden focus:ring-4 focus:ring-garden/10 disabled:bg-gray-100"
               />
             </div>
+          </div>
+
+          {/* Tim */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Tim Yang Bertugas <span className="text-xs font-normal text-gray-500">(cari nama, bisa banyak)</span>
+            </label>
+            <CrewPicker value={crew} onChange={setCrew} />
           </div>
 
           {/* Media Upload */}

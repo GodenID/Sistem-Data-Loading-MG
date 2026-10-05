@@ -286,6 +286,15 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                 </span>
               </div>
               <p className="font-semibold text-gray-900 text-sm">{loadingData.pic}</p>
+              {Array.isArray(loadingData.crew) && loadingData.crew.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {loadingData.crew.map((m) => (
+                    <span key={m.id} className="text-xs px-2 py-1 rounded-full bg-white border border-purple-200 text-purple-700 font-medium">
+                      {m.name || m.username}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-4 rounded-xl bg-orange-50 border border-orange-100">

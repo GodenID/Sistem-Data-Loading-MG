@@ -203,8 +203,11 @@ router.patch('/users/:id', requireAdmin, async (req, res) => {
 router.delete('/users/:id', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (id === req.user.id) return res.status(400).json({ error: 'Tidak bisa hapus diri sendiri' });
-    const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+        if (id === req.user.id) return res.status(400).json({ error: 'Tidak bisa hapus diri sendiri' });
+    const linked = await pool.query('SELECT COUNT(*)::int AS c FROM history_crew WHERE user_id = $1', [id]);
+    if (linked.rows[0].c > 0) {
+      return res.status(400).json({ error: 'User punya riwayat tim — nonaktifkan saja, jangan hapus' });
+    }    const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
     if (!target.rows.length) return res.status(404).json({ error: 'User tidak ditemukan' });
     if (target.rows[0].role === 'admin') {
       const c = await pool.query(

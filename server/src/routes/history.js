@@ -41,7 +41,54 @@ function buildHistoryWhere(q, values) {
     values.push(q.dateTo);
     conds.push(`lh.date <= $${values.length}`);
   }
+  if (q.crewUserId) {
+    values.push(Number(q.crewUserId));
+    conds.push(`EXISTS (SELECT 1 FROM history_crew hc WHERE hc.history_id = lh.id AND hc.user_id = $${values.length})`);
+  }
   return conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+}
+
+// Tempel daftar tim (user berakun) ke tiap baris history — 1 query batch.
+async function attachCrew(rows) {
+  const ids = [...new Set(rows.map((r) => r.id))];
+  if (!ids.length) return rows;
+  const { rows: crew } = await pool.query(
+    `SELECT hc.history_id, u.id, u.username, u.name
+     FROM history_crew hc JOIN users u ON u.id = hc.user_id
+     WHERE hc.history_id = ANY($1) ORDER BY u.name ASC`,
+    [ids]
+  );
+  const map = {};
+  crew.forEach((c) => {
+    (map[c.history_id] = map[c.history_id] || []).push({ id: c.id, username: c.username, name: c.name });
+  });
+  return rows.map((r) => ({ ...r, crew: map[r.id] || [] }));
+}
+
+// Ganti total tim satu dokumentasi (hanya id user yang ada).
+async function replaceCrew(historyId, userIds = []) {
+  const ids = [...new Set((userIds || []).map(Number).filter(Boolean))].slice(0, 20);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM history_crew WHERE history_id = $1', [historyId]);
+    if (ids.length) {
+      const ok = await client.query('SELECT id FROM users WHERE id = ANY($1) AND is_active = TRUE', [ids]);
+      const valid = ok.rows.map((r) => r.id);
+      for (const uid of valid) {
+        await client.query(
+          'INSERT INTO history_crew (history_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [historyId, uid]
+        );
+      }
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 function mapRow(r) {
@@ -79,7 +126,7 @@ router.get('/', async (req, res) => {
          ${where} ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, l, offset]
       );
-      return res.json({ data: rows.map(mapRow), count });
+      return res.json({ data: await attachCrew(rows.map(mapRow)), count });
     }
 
     const { rows } = await pool.query(
@@ -88,7 +135,7 @@ router.get('/', async (req, res) => {
        ${where} ${order}`,
       values
     );
-    res.json(rows.map(mapRow));
+    res.json(await attachCrew(rows.map(mapRow)));
   } catch (e) {
     console.error('GET /history:', e.message);
     res.status(500).json({ error: 'Gagal ambil history' });
@@ -258,7 +305,7 @@ function duplicateMessage(type) {
 // POST /api/history
 router.post('/', async (req, res) => {
   try {
-    const { company_id, date, pic, type, photo_count = 0, catatan = null } = req.body;
+    const { company_id, date, pic, type, photo_count = 0, catatan = null, crew = [] } = req.body;
     if (!company_id || !date || !pic || !type) {
       return res.status(400).json({ error: 'company_id, date, pic, type wajib' });
     }
@@ -266,7 +313,15 @@ router.post('/', async (req, res) => {
       'INSERT INTO loading_history_reports (company_id, date, pic, type, photo_count, catatan) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
       [company_id, date, pic, type, photo_count, catatan]
     );
-    res.status(201).json(rows[0]);
+    if (Array.isArray(crew) && crew.length) {
+      try {
+        await replaceCrew(rows[0].id, crew);
+      } catch (e) {
+        console.warn('Gagal simpan tim:', e.message);
+      }
+    }
+    const withCrew = await attachCrew([mapRow(rows[0])]);
+    res.status(201).json(withCrew[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: duplicateMessage(req.body?.type) });
     console.error('POST /history:', e.message);
@@ -302,6 +357,38 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Gagal hapus history' });
+  }
+});
+
+// GET /api/history/:id/crew
+router.get('/:id/crew', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.name
+       FROM history_crew hc JOIN users u ON u.id = hc.user_id
+       WHERE hc.history_id = $1 ORDER BY u.name ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: 'Gagal ambil tim' });
+  }
+});
+
+// POST /api/history/:id/crew { userIds: [...] } — ganti total tim
+router.post('/:id/crew', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body) ? req.body : req.body.userIds || req.body.crew || [];
+    await replaceCrew(Number(req.params.id), ids);
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.name
+       FROM history_crew hc JOIN users u ON u.id = hc.user_id
+       WHERE hc.history_id = $1 ORDER BY u.name ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: 'Gagal simpan tim' });
   }
 });
 
