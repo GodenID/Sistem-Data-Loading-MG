@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { AdminProvider } from './context/AdminContext';
 import { UploadQueueProvider } from './context/UploadQueueContext';
 import ErrorBoundary from './components/ErrorBoundary';
-import ProtectedRoute from './components/ProtectedRoute';
+import ProtectedRoute, { RequireAuth } from './components/ProtectedRoute';
 import Toaster from './components/Toaster';
 import UploadDock from './components/UploadDock';
 import OfflineBanner from './components/OfflineBanner';
@@ -33,9 +33,9 @@ function AnimatedRoutes() {
   return (
     <div key={location.pathname} className="page-enter">
       <Routes location={location}>
-      {/* Public Routes */}
-      <Route path="/" element={<Home />} />
-      <Route path="/client/:slug" element={<ClientDetail />} />
+      {/* Utama: wajib login (portal klien di bawah tetap publik) */}
+      <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
+      <Route path="/client/:slug" element={<RequireAuth><ClientDetail /></RequireAuth>} />
       <Route path="/portal/:token" element={<PublicClientView />} />
       <Route path="/share/:token" element={<PublicShareView />} />
 

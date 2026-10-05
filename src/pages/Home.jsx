@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Building2, Shield, Users, Package, Image, Clock, RotateCcw, Sparkles, User, CheckCircle2, ChevronLeft, ChevronRight, Calendar, MapPin, Activity } from 'lucide-react';
+import { Search, Building2, Shield, Users, Package, Image, Clock, RotateCcw, Sparkles, User, LogOut, CheckCircle2, ChevronLeft, ChevronRight, Calendar, MapPin, Activity } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import CompanyCard from '../components/CompanyCard';
 import PullIndicator from '../components/PullIndicator';
@@ -10,6 +10,7 @@ import AnimatedCounter from '../components/AnimatedCounter';
 import { getCompanies, getCompaniesCount, getActiveCompanyIds, getLoadingHistory, getLoadingHistorySummary, getActivityHeatmap } from '../utils/supabase';
 import { createSlug } from '../utils/slug';
 import { APP_VERSION } from '../utils/version';
+import { useAuth } from '../context/AuthContext';
 
 const ROTATION_PER_PAGE = 50;
 const SEARCH_LIMIT = 20;
@@ -38,6 +39,7 @@ const twoMonthsAgoStr = () => {
 
 const Home = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   // Gembok password home sudah dihapus (auth beneran via login).
   // isAuthenticated dipertahankan sebagai true agar logika fetch tidak berubah.
   const [isAuthenticated] = useState(true);
@@ -339,17 +341,31 @@ const Home = () => {
                 <p className="text-xs text-gray-500">Report Dokumentasi</p>
               </div>
             </div>
-            <a
-              href="#/admin/login"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.href = '/admin/login';
-              }}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
-            >
-              <Shield className="w-4 h-4" />
-              <span className="hidden sm:inline">Admin</span>
-            </a>
+            <div className="flex items-center gap-2">
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span className="hidden sm:inline">Admin</span>
+                </button>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-garden/10 text-garden-dark text-sm font-medium">
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">{user?.name || user?.username}</span>
+              </div>
+              <button
+                onClick={async () => {
+                  await logout();
+                  navigate('/admin/login', { replace: true });
+                }}
+                title="Keluar"
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </header>

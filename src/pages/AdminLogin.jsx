@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft, Shield, User } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
 import { APP_VERSION } from '../utils/version';
@@ -12,6 +12,16 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login, isAdmin, user } = useAdmin();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from;
+
+  const goAfterLogin = (role) => {
+    if (role === 'admin') {
+      navigate(typeof from === 'string' && from.startsWith('/admin') ? from : '/admin', { replace: true });
+    } else {
+      navigate(typeof from === 'string' && !from.startsWith('/admin') ? from : '/', { replace: true });
+    }
+  };
 
   // Redirect jika sudah login
   if (isAdmin) {
@@ -30,7 +40,7 @@ const AdminLogin = () => {
 
     const result = await login(username.trim(), password);
     if (result.success) {
-      navigate(result.user.role === 'admin' ? '/admin' : '/', { replace: true });
+      goAfterLogin(result.user.role);
     } else {
       setError(result.message);
     }
