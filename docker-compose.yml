@@ -1,0 +1,16 @@
+# Sistem Data Loading MG — API untuk Coolify (Build Pack: Docker Compose)
+# Database Postgres adalah resource terpisah (sudah dibikin),
+# jadi compose ini hanya menjalankan API dan konek via DATABASE_URL.
+
+services:
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      PORT: ${PORT:-3001}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL belum di-set di Environment Variables Coolify}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+    expose:
+      - "3001"
+    restart: unless-stopped

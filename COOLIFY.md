@@ -49,9 +49,9 @@ Rollback: jangan matikan Supabase lama sebelum H+2 stabil. Data lama tetap utuh.
 
 Coolify > New Resource > Application > pilih repo ini > ni:
 
-- Build Pack: **Dockerfile**
-- Dockerfile location: `server/Dockerfile`
-- Port: `3001`, health check: `/health`
+- Build Pack: **Docker Compose** (file `docker-compose.yml` di root)
+  (alternatif: Dockerfile dengan Dockerfile location `server/Dockerfile`)
+- Ports Exposes: `3001`, health check path: `/health`
 - Env:
   - `DATABASE_URL=postgresql://...` (dari langkah 1)
   - `CORS_ORIGIN=https://<frontend-pages>.pages.dev,https://report.domain-kamu.id`
