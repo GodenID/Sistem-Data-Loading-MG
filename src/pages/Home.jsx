@@ -358,7 +358,7 @@ const Home = () => {
               <button
                 onClick={async () => {
                   await logout();
-                  navigate('/admin/login', { replace: true });
+                  navigate('/login', { replace: true });
                 }}
                 title="Keluar"
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"

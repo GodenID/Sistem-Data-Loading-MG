@@ -251,7 +251,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
           {!user && (
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
               <span className="font-semibold">Belum login.</span> Upload wajib login
-              sebagai staff — <a href="#/admin/login" onClick={() => { window.location.href = '/admin/login'; }} className="underline font-semibold">login di sini</a>.
+              sebagai staff — <a href="#/login" onClick={() => { window.location.href = '/login'; }} className="underline font-semibold">login di sini</a>.
             </div>
           )}
           <div>

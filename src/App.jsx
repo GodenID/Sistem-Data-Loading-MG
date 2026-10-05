@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AdminProvider } from './context/AdminContext';
 import { UploadQueueProvider } from './context/UploadQueueContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -39,8 +39,10 @@ function AnimatedRoutes() {
       <Route path="/portal/:token" element={<PublicClientView />} />
       <Route path="/share/:token" element={<PublicShareView />} />
 
-      {/* Admin Routes */}
-      <Route path="/admin/login" element={<AdminLogin />} />
+      {/* Login */}
+      <Route path="/login" element={<AdminLogin />} />
+      {/* Alias lama */}
+      <Route path="/admin/login" element={<Navigate to="/login" replace />} />
       <Route path="/admin" element={
         <ProtectedRoute>
           <AdminDashboard />

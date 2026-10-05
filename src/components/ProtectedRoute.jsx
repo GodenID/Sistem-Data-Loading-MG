@@ -16,7 +16,7 @@ export const RequireAuth = ({ children }) => {
 
   if (loading) return <Spinner />;
   if (!user) {
-    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   return children;
 };
@@ -27,7 +27,7 @@ const ProtectedRoute = ({ children }) => {
 
   if (loading) return <Spinner />;
   if (!user) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
   if (!isAdmin) {
     return <Navigate to="/" replace />;
