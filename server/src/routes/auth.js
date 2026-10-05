@@ -19,8 +19,11 @@ router.post('/auth/login', async (req, res) => {
       String(username).trim(),
     ]);
     const user = rows[0];
-    if (!user || !user.is_active) {
+    if (!user) {
       return res.status(401).json({ error: 'Username atau password salah' });
+    }
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Akun ini ditangguhkan, harap hubungi Goden' });
     }
     const ok = await bcrypt.compare(String(password), user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Username atau password salah' });
