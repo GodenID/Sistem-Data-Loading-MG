@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, UserPlus, ShieldCheck, User as UserIcon,
-  Power, KeyRound, Trash2, Loader2,
+  ArrowLeft, UserPlus, Users, ShieldCheck, User as UserIcon,
+  Power, KeyRound, Trash2, Loader2, Copy, Check,
 } from 'lucide-react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,12 @@ const AdminUsers = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ username: '', password: '', name: '', role: 'staff' });
   const [saving, setSaving] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkPassword, setBulkPassword] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null); // { ok: [...], fail: [...] }
+  const [copied, setCopied] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -88,6 +94,60 @@ const AdminUsers = () => {
     }
   };
 
+  const randomPassword = (len = 8) => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let s = '';
+    for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  };
+
+  // Format per baris: username, nama, role (role opsional, default staff)
+  // Password: pakai kolom password bersama, atau acak per user jika dikosongkan.
+  const handleBulk = async (e) => {
+    e.preventDefault();
+    setError('');
+    const lines = bulkText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) {
+      setError('Isi dulu daftar user (satu baris satu user)');
+      return;
+    }
+    setBulkSaving(true);
+    const ok = [];
+    const fail = [];
+    for (const line of lines) {
+      const parts = line.split(',').map((p) => p.trim());
+      const [username, name, roleRaw] = parts;
+      const role = roleRaw === 'admin' ? 'admin' : 'staff';
+      if (!username) {
+        fail.push({ line, message: 'Username kosong' });
+        continue;
+      }
+      const password = bulkPassword || randomPassword();
+      try {
+        await apiPost('/api/users', { username, password, name: name || username, role });
+        ok.push({ username, password, role, generated: !bulkPassword });
+      } catch (err) {
+        fail.push({ line, message: err.message });
+      }
+    }
+    setBulkResult({ ok, fail });
+    setBulkSaving(false);
+    setBulkText('');
+    await fetchUsers();
+  };
+
+  const copyBulkResult = async () => {
+    if (!bulkResult) return;
+    const text = bulkResult.ok.map((r) => `${r.username} | ${r.password} | ${r.role}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* abaikan */
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
@@ -112,13 +172,22 @@ const AdminUsers = () => {
           </div>
         )}
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-4 w-full py-3 rounded-xl border-2 border-dashed border-garden/40 bg-garden/5 text-garden-dark font-medium hover:bg-garden/10 flex items-center justify-center gap-2"
-        >
-          <UserPlus className="w-4 h-4" />
-          Tambah User Baru
-        </button>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <button
+            onClick={() => { setShowForm(!showForm); setShowBulk(false); }}
+            className="py-3 rounded-xl border-2 border-dashed border-garden/40 bg-garden/5 text-garden-dark font-medium hover:bg-garden/10 flex items-center justify-center gap-2 text-sm"
+          >
+            <UserPlus className="w-4 h-4" />
+            Satu-satu
+          </button>
+          <button
+            onClick={() => { setShowBulk(!showBulk); setShowForm(false); }}
+            className="py-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 text-blue-700 font-medium hover:bg-blue-50 flex items-center justify-center gap-2 text-sm"
+          >
+            <Users className="w-4 h-4" />
+            Bulk Sekaligus
+          </button>
+        </div>
 
         {showForm && (
           <form onSubmit={handleAdd} className="bg-white rounded-2xl border border-gray-100 p-5 mb-4 space-y-3">
@@ -157,6 +226,69 @@ const AdminUsers = () => {
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Simpan User
             </button>
+          </form>
+        )}
+
+        {showBulk && (
+          <form onSubmit={handleBulk} className="bg-white rounded-2xl border border-gray-100 p-5 mb-4 space-y-3">
+            <p className="text-sm text-gray-600">
+              Satu baris satu user. Format: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">username, nama, role</code> — role boleh dikosongkan (= staff).
+            </p>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              rows={6}
+              placeholder={'budi, Budi Santoso\nsiti, Siti Aminah, admin\nagus, Agus Wijaya'}
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-garden font-mono text-sm"
+            />
+            <input
+              value={bulkPassword}
+              onChange={(e) => setBulkPassword(e.target.value)}
+              placeholder="Password untuk semua (kosongkan = acak per user)"
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-garden"
+            />
+            <button
+              type="submit"
+              disabled={bulkSaving}
+              className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {bulkSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Buat {bulkText.split('\n').filter((l) => l.trim()).length} User
+            </button>
+
+            {bulkResult && (
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Berhasil {bulkResult.ok.length}
+                    {bulkResult.fail.length > 0 && ` • Gagal ${bulkResult.fail.length}`}
+                  </p>
+                  {bulkResult.ok.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={copyBulkResult}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 flex items-center gap-1"
+                    >
+                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copied ? 'Tersalin' : 'Salin'}
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-48 overflow-y-auto font-mono text-xs">
+                  {bulkResult.ok.map((r) => (
+                    <div key={r.username} className="px-4 py-2 border-b border-gray-100 flex justify-between gap-2">
+                      <span className="text-green-700 truncate">{r.username} • {r.role}</span>
+                      <span className="text-gray-600 shrink-0">{r.password}{r.generated ? ' (acak)' : ''}</span>
+                    </div>
+                  ))}
+                  {bulkResult.fail.map((f, i) => (
+                    <div key={i} className="px-4 py-2 border-b border-gray-100 text-red-600 truncate">
+                      ✕ {f.line} — {f.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
         )}
 
