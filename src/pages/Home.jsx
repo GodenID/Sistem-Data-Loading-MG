@@ -777,7 +777,7 @@ const Home = () => {
       <footer className="border-t border-gray-100 bg-white mt-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
           <p className="text-center text-sm text-gray-400">
-            © 2026 Mutiari Garden. Report Dokumentasi System. • v{APP_VERSION}
+            © 2026 Mutiari Garden. Report Dokumentasi System. • V{APP_VERSION}
           </p>
         </div>
       </footer>

@@ -5,7 +5,7 @@ import { APP_VERSION } from '../utils/version';
 const AppFooter = () => (
   <footer className="py-6">
     <p className="text-center text-xs text-gray-400">
-      © 2026 Mutiari Garden • v{APP_VERSION}
+      © 2026 Mutiari Garden • V{APP_VERSION}
     </p>
   </footer>
 );

@@ -560,7 +560,7 @@ const PublicClientView = () => {
               ? new Date(shareData.expires_at).toLocaleDateString('id-ID')
               : 'Tidak ada batas waktu'}
             <br />
-            v{APP_VERSION}
+            V{APP_VERSION}
           </p>
         </div>
       </main>
