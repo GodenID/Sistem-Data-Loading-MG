@@ -14,3 +14,9 @@ services:
     expose:
       - "3001"
     restart: unless-stopped
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true
