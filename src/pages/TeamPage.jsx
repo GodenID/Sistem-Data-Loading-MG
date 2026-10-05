@@ -116,7 +116,7 @@ const TeamPage = () => {
           </button>
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Performa Tim</h1>
-            <p className="text-xs text-gray-500">Siapa loading berapa kali</p>
+            <p className="text-xs text-gray-500">Terhitung mulai 6 Okt 2026 • siapa loading berapa kali</p>
           </div>
         </div>
       </header>

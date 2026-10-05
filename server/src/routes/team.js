@@ -4,6 +4,10 @@ const { requireAuth } = require('../auth');
 
 const router = express.Router();
 
+// Statistik tim dihitung mulai tanggal ini (fitur petugas baru ada —
+// dokumentasi lama tidak ikut skor biar fair). Bisa diubah via env.
+const CREW_SINCE = process.env.CREW_STATS_SINCE || '2026-10-06';
+
 // Semua endpoint tim butuh login (staff maupun admin) —
 // daftar username tidak dibuka ke publik.
 router.use(requireAuth);
@@ -38,14 +42,15 @@ router.get('/stats', async (_req, res) => {
       `SELECT u.id, u.username, u.name, u.role, u.is_active,
         COUNT(*) FILTER (WHERE lh.type = 'loading')::int AS loading,
         COUNT(*) FILTER (WHERE lh.type = 'perawatan')::int AS perawatan,
-        COUNT(*)::int AS total,
+        COUNT(lh.id)::int AS total,
         COALESCE(SUM(lh.photo_count), 0)::int AS media,
         MAX(lh.date) AS last_date
        FROM users u
        LEFT JOIN history_crew hc ON hc.user_id = u.id
-       LEFT JOIN loading_history_reports lh ON lh.id = hc.history_id
+       LEFT JOIN loading_history_reports lh ON lh.id = hc.history_id AND lh.date >= $1
        GROUP BY u.id
-       ORDER BY total DESC, u.name ASC`
+       ORDER BY total DESC, u.name ASC`,
+      [CREW_SINCE]
     );
     res.json(rows);
   } catch (e) {
@@ -62,10 +67,10 @@ router.get('/:id/history', async (req, res) => {
        FROM history_crew hc
        JOIN loading_history_reports lh ON lh.id = hc.history_id
        LEFT JOIN companies_reports c ON c.id = lh.company_id
-       WHERE hc.user_id = $1
+       WHERE hc.user_id = $1 AND lh.date >= $2
        ORDER BY lh.date DESC, lh.created_at DESC
-       LIMIT $2`,
-      [req.params.id, limit]
+       LIMIT $3`,
+      [req.params.id, CREW_SINCE, limit]
     );
     res.json(
       rows.map((r) => ({
