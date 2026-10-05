@@ -21,10 +21,11 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { downloadPhotosAsZip } from '../utils/downloadZip';
-import { getPhotosByHistoryId, deletePhotoRecord, updateLoadingHistory } from '../utils/supabase';
+import { getPhotosByHistoryId, deletePhotoRecord, updateLoadingHistory, getHistoryCrew, setHistoryCrew } from '../utils/supabase';
 import { deleteFromS3 } from '../utils/s3Config';
 import { getMediaTypeFromUrl } from '../utils/media';
 import Lightbox from './Lightbox';
+import CrewPicker from './CrewPicker';
 
 const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -36,12 +37,32 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState(null);
+  const [crew, setCrew] = useState([]);
+  const [savingCrew, setSavingCrew] = useState(false);
 
   useEffect(() => {
     if (isOpen && loadingData?.id) {
       fetchPhotos();
+      // Petugas dari data list; refresh dari server biar segar
+      setCrew(Array.isArray(loadingData.crew) ? loadingData.crew : []);
+      getHistoryCrew(loadingData.id)
+        .then(setCrew)
+        .catch(() => {});
     }
   }, [isOpen, loadingData?.id]);
+
+  const handleCrewChange = async (next) => {
+    setCrew(next);
+    setSavingCrew(true);
+    try {
+      await setHistoryCrew(loadingData.id, next.map((c) => c.id));
+      onSuccess?.();
+    } catch (e) {
+      console.warn('Gagal simpan petugas:', e?.message);
+    } finally {
+      setSavingCrew(false);
+    }
+  };
 
   const fetchPhotos = async () => {
     try {
@@ -286,15 +307,19 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                 </span>
               </div>
               <p className="font-semibold text-gray-900 text-sm">{loadingData.pic}</p>
-              {Array.isArray(loadingData.crew) && loadingData.crew.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {loadingData.crew.map((m) => (
-                    <span key={m.id} className="text-xs px-2 py-1 rounded-full bg-white border border-purple-200 text-purple-700 font-medium">
-                      {m.name || m.username}
-                    </span>
-                  ))}
+            </div>
+
+            <div className="p-4 rounded-xl bg-teal-50 border border-teal-100">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-teal-600" />
+                  <span className="text-xs font-medium text-gray-500 uppercase">
+                    Petugas
+                  </span>
                 </div>
-              )}
+                {savingCrew && <span className="text-xs text-gray-400">Menyimpan...</span>}
+              </div>
+              <CrewPicker value={crew} onChange={handleCrewChange} placeholder="Tambah petugas — cari nama..." />
             </div>
 
             <div className="p-4 rounded-xl bg-orange-50 border border-orange-100">

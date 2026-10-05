@@ -21,6 +21,12 @@ const CrewPicker = ({ value = [], onChange, placeholder = 'Cari nama tim...' }) 
   }, []);
 
   useEffect(() => {
+    // Default TERTUTUP: daftar nama hanya muncul saat mengetik pencarian.
+    if (!query.trim()) {
+      setOptions([]);
+      setOpen(false);
+      return;
+    }
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       setLoading(true);
@@ -78,12 +84,11 @@ const CrewPicker = ({ value = [], onChange, placeholder = 'Cari nama tim...' }) 
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setOpen(true)}
           placeholder={value.length ? 'Tambah lagi...' : placeholder}
           className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white border-2 border-gray-200 text-gray-800 font-medium placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:border-garden focus:ring-4 focus:ring-garden/10 transition-all"
         />
       </div>
-      {open && (query.trim() || options.length > 0) && (
+      {open && query.trim() && (
         <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
           {loading ? (
             <p className="px-4 py-3 text-sm text-gray-500">Mencari...</p>
