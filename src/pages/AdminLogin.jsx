@@ -101,9 +101,9 @@ const AdminLogin = () => {
       <div className="flex-1 flex items-center justify-center px-4 py-8 sm:p-10">
         <div className="w-full max-w-md">
           <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8">
-            <h2 className="text-2xl font-bold text-gray-900">Selamat datang 👋</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Selamat datang</h2>
             <p className="text-sm text-gray-500 mt-1 mb-6">
-              Masuk untuk mencatat dokumentasi lapangan
+              Wajib login untuk mengupload dokumentasi loading / perawatan
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
