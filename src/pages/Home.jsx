@@ -347,10 +347,6 @@ const Home = () => {
                 alt="Mutiari Garden"
                 className="h-10 sm:h-14 w-auto object-contain shrink-0"
               />
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">Mutiari Garden</h1>
-                <p className="text-[11px] sm:text-xs text-gray-500 truncate">Report Dokumentasi</p>
-              </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {user?.role === 'admin' && (
@@ -365,10 +361,10 @@ const Home = () => {
               )}
               <div
                 title={user?.name || user?.username}
-                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:gap-2 sm:px-3 sm:py-2 rounded-full sm:rounded-xl bg-garden/10 text-garden-dark text-sm font-medium"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-full sm:rounded-xl bg-garden/10 text-garden-dark text-sm font-medium min-w-0"
               >
-                <User className="w-4 h-4" />
-                <span className="hidden sm:inline max-w-[120px] truncate">{user?.name || user?.username}</span>
+                <User className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-[100px] sm:max-w-[140px]">{user?.name || user?.username}</span>
               </div>
               <button
                 onClick={async () => {
