@@ -10,6 +10,7 @@ import { checkLoadingDuplicate } from '../utils/supabase';
 import { compressMultipleImages, calculateSavings } from '../utils/imageCompression';
 import { createMediaItemsFromFiles, formatDuration } from '../utils/media';
 import { useUploadQueue } from '../context/UploadQueueContext';
+import { useAuth } from '../context/AuthContext';
 
 const CONFIG = {
   loading: {
@@ -69,6 +70,7 @@ const CONFIG = {
 const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDuplicate, type = 'loading' }) => {
   const cfg = CONFIG[type] || CONFIG.loading;
   const { enqueueUpload } = useUploadQueue();
+  const { user } = useAuth();
 
   const [date, setDate] = useState(getTodayDate());
   const [pic, setPic] = useState('');
@@ -81,12 +83,13 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   useEffect(() => {
     if (isOpen) {
       setDate(getTodayDate());
-      setPic('');
+      // Otomatis isi nama yang login (tetap bisa diubah manual)
+      setPic(user?.name || '');
       setPhotos([]);
       setCatatan('');
       setIsSubmitting(false);
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -160,7 +163,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   };
 
   const handleSubmit = async () => {
-    if (!date || !pic || photos.length === 0 || !companyId) return;
+    if (!date || !pic || photos.length === 0 || !companyId || !user) return;
 
     // Cek cepat dari memori (data yang sudah dimuat di halaman)
     if (checkDuplicate) {
@@ -210,7 +213,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
     }
   };
 
-  const isFormValid = date && pic.trim() && photos.length > 0 && companyId;
+  const isFormValid = date && pic.trim() && photos.length > 0 && companyId && !!user;
   const HeaderIcon = cfg.headerIcon;
 
   if (!isOpen) return null;
@@ -245,6 +248,12 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {!user && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+              <span className="font-semibold">Belum login.</span> Upload wajib login
+              sebagai staff — <a href="#/admin/login" onClick={() => { window.location.href = '/admin/login'; }} className="underline font-semibold">login di sini</a>.
+            </div>
+          )}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Nama Perusahaan

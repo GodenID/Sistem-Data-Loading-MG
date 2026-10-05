@@ -8,6 +8,8 @@ const historyRouter = require('./routes/history');
 const photosRouter = require('./routes/photos');
 const shareRouter = require('./routes/shareLinks');
 const statsRouter = require('./routes/stats');
+const authRouter = require('./routes/auth');
+const { attachUser } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,11 +40,27 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+app.use('/api', attachUser);
+
+// Aturan akses: baca (GET) + portal share-link tetap publik tanpa login.
+// Tulis (POST/PATCH/PUT) wajib login, hapus (DELETE) wajib admin.
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.path === '/auth/login' || req.path === '/users/bootstrap') return next();
+  if (/^\/(company-)?share-links\/token\/.+\/access$/.test(req.path)) return next();
+  if (!req.user) return res.status(401).json({ error: 'Harus login dulu' });
+  if (req.method === 'DELETE' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Hanya admin yang boleh menghapus' });
+  }
+  next();
+});
+
 app.use('/api/companies', companiesRouter);
 app.use('/api/history', historyRouter);
 app.use('/api/photos', photosRouter);
 app.use('/api', shareRouter);
 app.use('/api/upload-stats', statsRouter);
+app.use('/api', authRouter);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

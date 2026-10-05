@@ -65,7 +65,8 @@ Test data: `curl https://api-.../api/companies/count`
 Set di Cloudflare Pages > Settings > Environment Variables:
 
 - `VITE_API_URL=https://api-projectpg.prasastigroup.id`
-- `VITE_S3_ACCESS_KEY`, `VITE_S3_SECRET_KEY`, `VITE_ADMIN_PASSWORD`, `VITE_HOME_PASSWORD` (sama seperti dulu)
+- `VITE_S3_ACCESS_KEY`, `VITE_S3_SECRET_KEY` (sama seperti dulu)
+- Login pakai akun database (tabel `users`), bukan password env lagi
 - **Hapus** `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (sudah tidak dipakai)
 
 Lalu seperti biasa:

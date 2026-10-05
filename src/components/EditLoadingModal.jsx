@@ -20,8 +20,10 @@ import { formatDate } from '../utils/date';
 import { uploadMultipleToS3, deleteFromS3 } from '../utils/s3Config';
 import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, checkLoadingDuplicate } from '../utils/supabase';
 import { createMediaItemsFromFiles, formatDuration, getMediaTypeFromUrl, getMediaUploadSuccessMessage } from '../utils/media';
+import { useAuth } from '../context/AuthContext';
 
 const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
+  const { user } = useAuth();
   const [date, setDate] = useState('');
   const [pic, setPic] = useState('');
   const [existingPhotos, setExistingPhotos] = useState([]);
@@ -38,7 +40,7 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   useEffect(() => {
     if (isOpen && loadingData) {
       setDate(loadingData.date || '');
-      setPic(loadingData.pic || '');
+      setPic(loadingData.pic || user?.name || '');
       setNewPhotos([]);
       setPhotosToDelete([]);
       setUploadProgress(0);

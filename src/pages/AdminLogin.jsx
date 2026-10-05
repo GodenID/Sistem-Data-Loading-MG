@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Eye, EyeOff, ArrowLeft, Shield } from 'lucide-react';
+import { Lock, Eye, EyeOff, ArrowLeft, Shield, User } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
 import { APP_VERSION } from '../utils/version';
 
 const AdminLogin = () => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAdmin } = useAdmin();
+  const { login, isAdmin, user } = useAdmin();
   const navigate = useNavigate();
 
   // Redirect jika sudah login
@@ -17,21 +18,23 @@ const AdminLogin = () => {
     navigate('/admin', { replace: true });
     return null;
   }
+  if (user) {
+    navigate('/', { replace: true });
+    return null;
+  }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = login(password);
-      if (result.success) {
-        navigate('/admin', { replace: true });
-      } else {
-        setError(result.message);
-      }
-      setIsLoading(false);
-    }, 500);
+    const result = await login(username.trim(), password);
+    if (result.success) {
+      navigate(result.user.role === 'admin' ? '/admin' : '/', { replace: true });
+    } else {
+      setError(result.message);
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -57,7 +60,7 @@ const AdminLogin = () => {
                 className="h-full w-auto object-contain drop-shadow-lg"
               />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Admin Panel</h1>
+            <h1 className="text-2xl font-bold text-white mb-1">Masuk</h1>
             <p className="text-white/80 text-sm">Mutiari Garden Report</p>
           </div>
 
@@ -66,7 +69,26 @@ const AdminLogin = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Password Admin
+                  Username
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <User className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Username..."
+                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-2 border-gray-200 text-gray-800 font-medium placeholder:text-gray-400 focus:outline-none focus:border-garden focus:ring-4 focus:ring-garden/10 transition-all duration-200"
+                    autoFocus
+                    autoComplete="username"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -102,9 +124,9 @@ const AdminLogin = () => {
 
               <button
                 type="submit"
-                disabled={!password || isLoading}
+                disabled={!username.trim() || !password || isLoading}
                 className={`w-full py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-2 transition-all duration-300 ${
-                  password && !isLoading
+                  username.trim() && password && !isLoading
                     ? 'bg-gradient-to-r from-garden to-garden-dark text-white shadow-lg shadow-garden/30 hover:shadow-xl hover:shadow-garden/40 hover:-translate-y-0.5 active:translate-y-0'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}

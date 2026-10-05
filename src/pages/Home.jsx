@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Building2, Shield, Users, Package, Image, Clock, RotateCcw, Sparkles, User, CheckCircle2, ChevronLeft, ChevronRight, Calendar, MapPin, Activity } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import CompanyCard from '../components/CompanyCard';
-import HomePasswordModal from '../components/HomePasswordModal';
 import PullIndicator from '../components/PullIndicator';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import Skeleton from '../components/Skeleton';
@@ -39,11 +38,9 @@ const twoMonthsAgoStr = () => {
 
 const Home = () => {
   const navigate = useNavigate();
-  // Baca session secara synchronous saat init — refresh tidak kedip modal password.
-  // (Sebelumnya dicek di useEffect setelah render pertama → modal sempat tampil sekilas.)
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem('homeAuthenticated') === 'true'
-  );
+  // Gembok password home sudah dihapus (auth beneran via login).
+  // isAuthenticated dipertahankan sebagai true agar logika fetch tidak berubah.
+  const [isAuthenticated] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -323,11 +320,6 @@ const Home = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, searchQuery, startDate, endDate]);
-
-  // Show password modal if not authenticated
-  if (!isAuthenticated) {
-    return <HomePasswordModal onAuthenticated={() => setIsAuthenticated(true)} />;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-garden-light/30">

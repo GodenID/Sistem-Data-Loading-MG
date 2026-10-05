@@ -19,11 +19,15 @@ function buildQuery(params = {}) {
 
 async function request(path, { method = 'GET', body, query } = {}) {
   const url = `${BASE}${path}${buildQuery(query)}`;
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('mg_auth_token') : null;
   let res;
   try {
     res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {

@@ -13,6 +13,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminHistory from './pages/AdminHistory';
 import AdminClients from './pages/AdminClients';
+import AdminUsers from './pages/AdminUsers';
 
 import PublicClientView from './pages/PublicClientView';
 import PublicShareView from './pages/PublicShareView';
@@ -53,6 +54,11 @@ function AnimatedRoutes() {
       <Route path="/admin/clients" element={
         <ProtectedRoute>
           <AdminClients />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/users" element={
+        <ProtectedRoute>
+          <AdminUsers />
         </ProtectedRoute>
       } />
 

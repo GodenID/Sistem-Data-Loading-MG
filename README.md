@@ -61,6 +61,25 @@ S3 Onidel Cloud (bucket `loading` — foto & backup)
 └── README.md
 ```
 
+## 🔐 Auth & User
+
+Login username + password (tabel `users`, hash `bcrypt`, session token 30 hari):
+
+| Role | Bisa apa |
+|------|----------|
+| `admin` | Semua: upload, edit, **hapus**, kelola user |
+| `staff` | Upload + edit, **tidak bisa hapus** |
+
+- Kolom PIC di form loading/perawatan otomatis terisi nama yang login.
+- Tulis (POST/PATCH/PUT) wajib login, hapus (DELETE) wajib admin. Baca + portal klien tetap publik.
+- Admin pertama: saat tabel `users` masih kosong, buat via:
+  ```bash
+  curl -X POST https://API-DOMAIN/api/users/bootstrap \
+    -H 'Content-Type: application/json' \
+    -d '{"username":"goden","password":"MIN_6_KARAKTER","name":"Goden"}'
+  ```
+- Kelola user di `/admin/users` (tambah, role, nonaktif, reset password, hapus).
+
 ## 🚀 Quickstart (lokal)
 
 **1. Backend**
@@ -89,8 +108,6 @@ Frontend (`.env`, juga di-set di Cloudflare Pages):
 | `VITE_API_URL` | `https://api-domain-kamu.id` | Base URL backend Coolify |
 | `VITE_S3_ACCESS_KEY` | `****` | Akses S3 Onidel |
 | `VITE_S3_SECRET_KEY` | `****` | Secret S3 Onidel |
-| `VITE_ADMIN_PASSWORD` | `****` | Password halaman admin |
-| `VITE_HOME_PASSWORD` | `****` | Password halaman home |
 
 Backend (`server/.env`, di-set di Coolify):
 

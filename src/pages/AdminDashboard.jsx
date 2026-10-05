@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Users, 
-  Image, 
-  RotateCcw, 
-  LogOut, 
+import {
+  Users,
+  Image,
+  RotateCcw,
+  LogOut,
   ChevronRight,
   TrendingUp,
   Calendar,
   Building2,
   User,
+  ShieldCheck,
   Sparkles,
   Loader2,
   HardDrive,
@@ -219,6 +220,12 @@ const AdminDashboard = () => {
             title="History Dokumentasi"
             description="Lihat semua riwayat loading & perawatan"
             onClick={() => navigate('/admin/history')}
+          />
+          <MenuItem
+            icon={ShieldCheck}
+            title="Kelola User"
+            description="Akun staff & admin, reset password"
+            onClick={() => navigate('/admin/users')}
           />
         </div>
 
