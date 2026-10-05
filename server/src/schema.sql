@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL DEFAULT '',
     role VARCHAR(20) NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'staff')),
     is_active BOOLEAN DEFAULT TRUE,
+    must_change_password BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

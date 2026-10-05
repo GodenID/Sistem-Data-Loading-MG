@@ -7,7 +7,7 @@ const { requireAuth, requireAdmin } = require('../auth');
 const router = express.Router();
 
 const SESSION_DAYS = 30;
-const PUBLIC_USER = 'SELECT id, username, name, role, is_active, created_at FROM users';
+const PUBLIC_USER = 'SELECT id, username, name, role, is_active, must_change_password, created_at FROM users';
 
 // POST /api/auth/login { username, password }
 router.post('/auth/login', async (req, res) => {
@@ -36,7 +36,7 @@ router.post('/auth/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, name: user.name, role: user.role },
+      user: { id: user.id, username: user.username, name: user.name, role: user.role, must_change_password: user.must_change_password },
     });
   } catch (e) {
     console.error('POST /auth/login:', e.message);
@@ -61,18 +61,28 @@ router.get('/auth/me', async (req, res) => {
   res.json({ user: req.user });
 });
 
-// POST /api/auth/change-password { oldPassword, newPassword }
+// POST /api/auth/change-password { oldPassword?, newPassword }
+// Wajib ganti saat must_change_password (login pertama / habis di-reset admin)
+// — dalam kondisi itu password lama tidak perlu ditanya lagi.
 router.post('/auth/change-password', requireAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body || {};
-    if (!newPassword || String(newPassword).length < 6) {
-      return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
+    if (!newPassword || String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'Password baru minimal 8 karakter' });
     }
-    const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-    const ok = await bcrypt.compare(String(oldPassword || ''), rows[0].password_hash);
-    if (!ok) return res.status(401).json({ error: 'Password lama salah' });
+    const { rows } = await pool.query(
+      'SELECT password_hash, must_change_password FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (!rows[0].must_change_password) {
+      const ok = await bcrypt.compare(String(oldPassword || ''), rows[0].password_hash);
+      if (!ok) return res.status(401).json({ error: 'Password lama salah' });
+    }
     const hash = await bcrypt.hash(String(newPassword), 10);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+    await pool.query(
+      'UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2',
+      [hash, req.user.id]
+    );
     await pool.query('DELETE FROM sessions WHERE user_id = $1', [req.user.id]);
     // sesi baru untuk yang sedang login (biar tidak mental)
     const token = crypto.randomBytes(32).toString('hex');
@@ -112,7 +122,7 @@ router.post('/users/bootstrap', async (req, res) => {
     }
     const hash = await bcrypt.hash(String(password), 10);
     const r = await pool.query(
-      'INSERT INTO users (username, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, name, role',
+      'INSERT INTO users (username, password_hash, name, role, must_change_password) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, name, role',
       [String(username).trim(), hash, name || String(username).trim(), 'admin']
     );
     res.status(201).json(r.rows[0]);
@@ -132,7 +142,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     if (!['admin', 'staff'].includes(role)) return res.status(400).json({ error: 'Role harus admin/staff' });
     const hash = await bcrypt.hash(String(password), 10);
     const r = await pool.query(
-      'INSERT INTO users (username, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, name, role, is_active, created_at',
+      'INSERT INTO users (username, password_hash, name, role, must_change_password) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, name, role, is_active, created_at',
       [String(username).trim(), hash, name || String(username).trim(), role]
     );
     res.status(201).json(r.rows[0]);
@@ -156,6 +166,9 @@ router.patch('/users/:id', requireAdmin, async (req, res) => {
     if (req.body.password !== undefined) {
       if (String(req.body.password).length < 6) return res.status(400).json({ error: 'Password min 6' });
       data.password_hash = await bcrypt.hash(String(req.body.password), 10);
+      // Password di-reset admin -> user wajib ganti saat login berikut
+      // (kecuali admin mengganti passwordnya sendiri)
+      if (id !== req.user.id) data.must_change_password = true;
     }
     // Admin tidak boleh menurunkan/mematikan dirinya sendiri
     if (id === req.user.id && (data.role === 'staff' || data.is_active === false)) {

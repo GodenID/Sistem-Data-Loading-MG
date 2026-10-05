@@ -9,7 +9,7 @@ async function attachUser(req, _res, next) {
   if (!m) return next();
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.username, u.name, u.role
+      `SELECT u.id, u.username, u.name, u.role, u.must_change_password
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = TRUE
        LIMIT 1`,

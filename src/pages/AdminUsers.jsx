@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import PasswordStrength from '../components/PasswordStrength';
 import AppFooter from '../components/AppFooter';
 
 const AdminUsers = () => {
@@ -210,6 +211,7 @@ const AdminUsers = () => {
               placeholder="Password (min 6 karakter)"
               className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-garden"
             />
+            <PasswordStrength password={form.password} />
             <select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}

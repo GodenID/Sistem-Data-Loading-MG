@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminHistory from './pages/AdminHistory';
 import AdminClients from './pages/AdminClients';
 import AdminUsers from './pages/AdminUsers';
+import ChangePassword from './pages/ChangePassword';
 
 import PublicClientView from './pages/PublicClientView';
 import PublicShareView from './pages/PublicShareView';
@@ -43,6 +44,8 @@ function AnimatedRoutes() {
       <Route path="/login" element={<AdminLogin />} />
       {/* Alias lama */}
       <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+      {/* Wajib ganti password (login pertama / habis reset) */}
+      <Route path="/ganti-password" element={<RequireAuth allowMustChange><ChangePassword /></RequireAuth>} />
       <Route path="/admin" element={
         <ProtectedRoute>
           <AdminDashboard />
