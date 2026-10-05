@@ -3,7 +3,7 @@ import { Building2, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createSlug } from '../utils/slug';
 
-const CompanyCard = ({ company, index, isActive = true, category = '' }) => {
+const CompanyCard = ({ company, index, isActive = true }) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -65,17 +65,7 @@ const CompanyCard = ({ company, index, isActive = true, category = '' }) => {
             leading-tight
           ">
             <span className="line-clamp-2">{company.name}</span>
-            {category === 'sewa_bulanan' && (
-              <span className="inline-block ml-2 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-medium leading-normal align-middle">
-                Sewa Bulanan
-              </span>
-            )}
-            {category === 'project' && (
-              <span className="inline-block ml-2 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-medium leading-normal align-middle">
-                Project
-              </span>
-            )}
-            {!isActive && category !== 'project' && (
+            {!isActive && (
               <span className="inline-block ml-2 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-medium leading-normal align-middle">
                 Tidak Aktif
               </span>

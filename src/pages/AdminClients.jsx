@@ -27,6 +27,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { getCompanies, deleteCompany, updateCompany, addCompany, getLoadingHistory } from '../utils/supabase';
+import AppFooter from '../components/AppFooter';
 import { exportCompaniesToExcel } from '../utils/exportExcel';
 import { uploadCompanyLogo, deleteOldLogo } from '../utils/logoHandler';
 import { toast } from '../utils/toast';
@@ -39,7 +40,6 @@ const AdminClients = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [enableMonthFilter, setEnableMonthFilter] = useState(false);
   const today = new Date();
   const [filterMonth, setFilterMonth] = useState(today.getMonth());
@@ -60,7 +60,6 @@ const AdminClients = () => {
     contact: '',
     sales_name: '',
     pic_loading: '',
-    category: '',
     tanaman_meja: 0,
     tanaman_lantai: 0,
     anggrek_bulan: 0,
@@ -137,13 +136,7 @@ const AdminClients = () => {
     if (statusFilter === 'active') {
       result = result.filter(company => company.isActive);
     } else     if (statusFilter === 'inactive') {
-      result = result.filter(company => !company.isActive && company.category !== 'project');
-    }
-
-    if (categoryFilter === 'sewa_bulanan') {
-      result = result.filter(company => company.category === 'sewa_bulanan');
-    } else if (categoryFilter === 'project') {
-      result = result.filter(company => company.category === 'project');
+      result = result.filter(company => !company.isActive);
     }
 
     // Month filter: only show clients with documentation in selected month
@@ -161,7 +154,7 @@ const AdminClients = () => {
     }
 
     return result;
-  }, [clientsWithStatus, searchQuery, statusFilter, categoryFilter, loadingHistory, filterMonth, filterYear, enableMonthFilter]);
+  }, [clientsWithStatus, searchQuery, statusFilter, loadingHistory, filterMonth, filterYear, enableMonthFilter]);
 
   // Hitung statistik per client
   const getClientStats = (companyId) => {
@@ -183,7 +176,6 @@ const AdminClients = () => {
         pic_name: client.pic_name || '',
         sales_name: client.sales_name || '',
         pic_loading: client.pic_loading || '',
-        category: client.category || '',
         tanaman_meja: client.tanaman_meja || 0,
         tanaman_lantai: client.tanaman_lantai || 0,
         anggrek_bulan: client.anggrek_bulan || 0,
@@ -231,7 +223,6 @@ const AdminClients = () => {
       contact: '',
       sales_name: '',
       pic_loading: '',
-      category: '',
       tanaman_meja: 0,
       tanaman_lantai: 0,
       anggrek_bulan: 0,
@@ -752,60 +743,6 @@ const AdminClients = () => {
           <span className="flex items-center gap-1">
             Total: <strong className="text-gray-800">{companies.length}</strong>
           </span>
-          <span className="flex items-center gap-1 text-purple-600">
-            Sewa Bulanan: <strong>{companies.filter(c => c.category === 'sewa_bulanan').length}</strong>
-          </span>
-          <span className="flex items-center gap-1 text-blue-600">
-            Project: <strong>{companies.filter(c => c.category === 'project').length}</strong>
-          </span>
-        </div>
-
-        {/* Category Filter */}
-        <div className="flex items-center gap-2 mt-2">
-          <button
-            onClick={() => setCategoryFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              categoryFilter === 'all'
-                ? 'bg-gray-800 text-white'
-                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            Semua Kategori
-          </button>
-          <button
-            onClick={() => setCategoryFilter('sewa_bulanan')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              categoryFilter === 'sewa_bulanan'
-                ? 'bg-purple-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            <span>Sewa Bulanan</span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-              categoryFilter === 'sewa_bulanan'
-                ? 'bg-purple-500/40'
-                : 'bg-purple-50 text-purple-600'
-            }`}>
-              {companies.filter(c => c.category === 'sewa_bulanan').length}
-            </span>
-          </button>
-          <button
-            onClick={() => setCategoryFilter('project')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              categoryFilter === 'project'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            <span>Project</span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-              categoryFilter === 'project'
-                ? 'bg-blue-500/40'
-                : 'bg-blue-50 text-blue-600'
-            }`}>
-              {companies.filter(c => c.category === 'project').length}
-            </span>
-          </button>
         </div>
         
         {/* Export Status */}
@@ -878,17 +815,7 @@ const AdminClients = () => {
                   {/* Info */}
                   <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2 flex-wrap" title={company.name}>
                     <span className="line-clamp-2">{company.name}</span>
-                    {company.category === 'sewa_bulanan' && (
-                      <span className="shrink-0 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-medium leading-normal">
-                        Sewa Bulanan
-                      </span>
-                    )}
-                    {company.category === 'project' && (
-                      <span className="shrink-0 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-medium leading-normal">
-                        Project
-                      </span>
-                    )}
-                    {!company.isActive && company.category !== 'project' && (
+                    {!company.isActive && (
                       <span className="shrink-0 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-medium leading-normal">
                         Tidak Aktif
                       </span>
@@ -929,6 +856,7 @@ const AdminClients = () => {
           </div>
         )}
       </main>
+      <AppFooter />
 
       {/* Add/Edit Modal */}
       {showModal && (
@@ -1088,43 +1016,6 @@ const AdminClients = () => {
                   placeholder="Nama default PIC untuk loading/perawatan"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-garden focus:ring-2 focus:ring-garden/10"
                 />
-              </div>
-
-              {/* Kategori */}
-              <div className="pt-4 border-t border-gray-100">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Kategori</h4>
-                <div className="flex gap-3">
-                  <label className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all flex-1 ${
-                    formData.category === 'sewa_bulanan'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="category"
-                      value="sewa_bulanan"
-                      checked={formData.category === 'sewa_bulanan'}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="sr-only"
-                    />
-                    <span className="text-sm font-medium">Sewa Bulanan</span>
-                  </label>
-                  <label className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all flex-1 ${
-                    formData.category === 'project'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="category"
-                      value="project"
-                      checked={formData.category === 'project'}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="sr-only"
-                    />
-                    <span className="text-sm font-medium">Project</span>
-                  </label>
-                </div>
               </div>
 
               {/* Jumlah Tanaman */}

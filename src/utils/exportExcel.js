@@ -2,14 +2,23 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
 /**
- * Export data history ke Excel
+ * Export data history ke Excel (2 sheet: detail + rekap per sales)
  * @param {Array} data - Array history data
  * @param {string} filename - Nama file
+ * @param {Array} companies - Array companies (untuk lookup sales saat join tidak membawa sales_name)
  */
-export const exportToExcel = (data, filename = 'report-mutiari-garden') => {
+export const exportToExcel = (data, filename = 'report-mutiari-garden', companies = []) => {
   if (!data || data.length === 0) {
     throw new Error('Tidak ada data untuk diexport');
   }
+
+  const companySalesMap = {};
+  (companies || []).forEach(c => {
+    companySalesMap[c.id] = c.sales_name || '-';
+  });
+
+  const resolveSales = (item) =>
+    item.companySales || item.sales_name || companySalesMap[item.company_id] || '-';
 
   // Format data untuk Excel
   const formattedData = data.map((item, index) => ({
@@ -21,6 +30,7 @@ export const exportToExcel = (data, filename = 'report-mutiari-garden') => {
     }),
     'Jenis': item.type === 'perawatan' ? 'Perawatan' : 'Loading',
     'Nama Perusahaan': item.companyName,
+    'Sales': resolveSales(item),
     'PIC/Perawatan Oleh': item.pic,
     'Jumlah Media': item.photo_count || 0,
     'Waktu Input': item.created_at ? new Date(item.created_at).toLocaleString('id-ID', {
@@ -41,6 +51,7 @@ export const exportToExcel = (data, filename = 'report-mutiari-garden') => {
     { wch: 20 },  // Tanggal
     { wch: 12 },  // Jenis
     { wch: 35 },  // Nama Perusahaan
+    { wch: 20 },  // Sales
     { wch: 25 },  // PIC
     { wch: 12 },  // Jumlah Media
     { wch: 20 },  // Waktu Input
@@ -63,6 +74,41 @@ export const exportToExcel = (data, filename = 'report-mutiari-garden') => {
   // Buat workbook
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Report Data');
+
+  // Sheet 2: Rekap per Sales — sales mana pegang client apa saja
+  const salesAgg = {};
+  data.forEach((item) => {
+    const sales = resolveSales(item);
+    if (!salesAgg[sales]) {
+      salesAgg[sales] = { sales, total: 0, loading: 0, perawatan: 0, media: 0, clients: new Set() };
+    }
+    const s = salesAgg[sales];
+    s.total += 1;
+    if (item.type === 'perawatan') s.perawatan += 1;
+    else s.loading += 1;
+    s.media += item.photo_count || 0;
+    if (item.companyName) s.clients.add(item.companyName);
+  });
+  const rekapSales = Object.values(salesAgg)
+    .sort((a, b) => b.total - a.total)
+    .map((s, i) => ({
+      'No': i + 1,
+      'Sales': s.sales,
+      'Total Dokumentasi': s.total,
+      'Loading': s.loading,
+      'Perawatan': s.perawatan,
+      'Total Media': s.media,
+      'Jumlah Client': s.clients.size,
+      'Daftar Client': [...s.clients].sort().join('; '),
+    }));
+  if (rekapSales.length > 0) {
+    const salesSheet = XLSX.utils.json_to_sheet(rekapSales);
+    salesSheet['!cols'] = [
+      { wch: 5 }, { wch: 20 }, { wch: 17 }, { wch: 10 },
+      { wch: 10 }, { wch: 12 }, { wch: 13 }, { wch: 80 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, salesSheet, 'Rekap Sales');
+  }
 
   // Generate file
   const excelBuffer = XLSX.write(workbook, { 
@@ -108,6 +154,7 @@ export const exportCompaniesToExcel = (companies, history) => {
     return {
       'No': index + 1,
       'Nama Perusahaan': company.name,
+      'Sales': company.sales_name || '-',
       'Alamat': company.address || '-',
       'PIC': company.pic_name || '-',
       'Kontak': company.contact || '-',
@@ -131,6 +178,7 @@ export const exportCompaniesToExcel = (companies, history) => {
   worksheet['!cols'] = [
     { wch: 5 },   // No
     { wch: 35 },  // Nama
+    { wch: 20 },  // Sales
     { wch: 40 },  // Alamat
     { wch: 20 },  // PIC
     { wch: 15 },  // Kontak

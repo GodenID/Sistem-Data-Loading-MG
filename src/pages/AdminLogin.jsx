@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft, Shield } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
+import { APP_VERSION } from '../utils/version';
 
 const AdminLogin = () => {
   const [password, setPassword] = useState('');
@@ -125,7 +126,7 @@ const AdminLogin = () => {
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          © 2026 Mutiari Garden. Hak Cipta Dilindungi.
+          © 2026 Mutiari Garden. Hak Cipta Dilindungi. • v{APP_VERSION}
         </p>
       </div>
     </div>

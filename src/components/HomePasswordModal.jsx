@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Lock, 
-  Eye, 
-  EyeOff, 
+import {
+  Lock,
+  Eye,
+  EyeOff,
   ArrowRight,
   Leaf,
   Shield
 } from 'lucide-react';
+import { APP_VERSION } from '../utils/version';
 
 const CORRECT_PASSWORD = import.meta.env.VITE_HOME_PASSWORD || '';
 
@@ -147,7 +148,7 @@ const HomePasswordModal = ({ onAuthenticated }) => {
 
             <div className="mt-6 text-center">
               <p className="text-xs text-gray-400">
-                © 2026 Mutiari Garden. Hak Cipta Dilindungi.
+                © 2026 Mutiari Garden. Hak Cipta Dilindungi. • v{APP_VERSION}
               </p>
             </div>
           </div>

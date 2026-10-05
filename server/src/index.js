@@ -1,0 +1,58 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const pool = require('./db');
+
+const companiesRouter = require('./routes/companies');
+const historyRouter = require('./routes/history');
+const photosRouter = require('./routes/photos');
+const shareRouter = require('./routes/shareLinks');
+const statsRouter = require('./routes/stats');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// CORS: izinkan frontend Cloudflare + lokal
+const allowed = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true); // curl / healthcheck
+      if (!allowed.length || allowed.includes(origin)) return cb(null, true);
+      return cb(null, false);
+    },
+  })
+);
+app.use(express.json({ limit: '2mb' }));
+
+app.get('/health', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, db: 'up' });
+  } catch (e) {
+    res.status(500).json({ ok: false, db: 'down', error: e.message });
+  }
+});
+
+app.use('/api/companies', companiesRouter);
+app.use('/api/history', historyRouter);
+app.use('/api/photos', photosRouter);
+app.use('/api', shareRouter);
+app.use('/api/upload-stats', statsRouter);
+
+// 404
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled:', err.message);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`MG Report API jalan di port ${PORT}`);
+});

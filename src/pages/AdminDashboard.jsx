@@ -20,6 +20,7 @@ import { getCompanies, getLoadingHistory } from '../utils/supabase';
 import BackupButton from '../components/BackupButton';
 import RestoreBackup from '../components/RestoreBackup';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import AppFooter from '../components/AppFooter';
 
 // Komponen Statistik Card
 const StatCard = ({ icon: Icon, title, value, subtitle, color, onClick, isLoading }) => (
@@ -323,6 +324,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       </main>
+      <AppFooter />
     </div>
   );
 };

@@ -28,8 +28,9 @@ import {
 } from 'lucide-react';
 import LoadingDetailModal from '../components/LoadingDetailModal';
 import EditLoadingModal from '../components/EditLoadingModal';
-import { getLoadingHistory, getCompanies, deleteLoadingHistory } from '../utils/supabase';
-import { deleteFromS3 } from '../utils/s3Config';
+import AppFooter from '../components/AppFooter';
+import { getLoadingHistory, getLoadingHistorySummary, getCompanies, deleteLoadingHistory, getPhotosByHistoryId } from '../utils/supabase';
+import { deleteMultipleFromS3 } from '../utils/s3Config';
 import { exportToExcel } from '../utils/exportExcel';
 
 const ITEMS_PER_PAGE = 20;
@@ -39,6 +40,9 @@ const AdminHistory = () => {
   const [loadingHistory, setLoadingHistory] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [summary, setSummary] = useState({ total: 0, loading: 0, perawatan: 0, media: 0 });
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
@@ -65,119 +69,135 @@ const AdminHistory = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState(null);
 
+  // Debounce input pencarian agar tidak query tiap ketikan (400ms)
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Bangun filter server dari state UI.
+  // company/type/date dikirim ke Supabase; search teks = nama perusahaan ATAU pic.
+  const buildServerFilters = () => {
+    const f = {
+      sortBy: sortField === 'company' ? 'date' : sortField,
+      sortDir: sortDirection,
+    };
+    if (selectedCompany !== 'all') f.companyId = parseInt(selectedCompany);
+    if (selectedType !== 'all') f.type = selectedType;
+    if (dateFrom) f.dateFrom = dateFrom;
+    if (dateTo) f.dateTo = dateTo;
+    if (searchQuery) {
+      if (selectedCompany === 'all') {
+        const q = searchQuery.toLowerCase();
+        const matched = companies
+          .filter(c => (c.name || '').toLowerCase().includes(q))
+          .map(c => c.id);
+        if (matched.length > 0) f.companyIds = matched;
+      }
+      f.picSearch = searchQuery;
+    }
+    return f;
+  };
+
+  // Fetch halaman aktif dari server (bukan full-table)
+  const fetchPage = async (page = currentPage) => {
+    try {
+      setIsLoading(true);
+      const filters = buildServerFilters();
+      const { data, count } = await getLoadingHistory(filters, { page, limit: ITEMS_PER_PAGE });
+      let items = data || [];
+      // Sort nama perusahaan hanya bisa di memori (kolom join) — per halaman
+      if (sortField === 'company') {
+        items = [...items].sort((a, b) =>
+          sortDirection === 'asc'
+            ? (a.companyName || '').localeCompare(b.companyName || '')
+            : (b.companyName || '').localeCompare(a.companyName || '')
+        );
+      }
+      setLoadingHistory(items);
+      setTotalCount(count ?? 0);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Gagal memuat data: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Ringkasan filter aktif via count ringan (tanpa fetch full-table)
+  const fetchSummary = async () => {
+    try {
+      const filters = buildServerFilters();
+      delete filters.sortBy;
+      delete filters.sortDir;
+      const s = await getLoadingHistorySummary(filters);
+      setSummary(s);
+    } catch (error) {
+      console.warn('Gagal memuat ringkasan:', error?.message);
+    }
+  };
+
+  const fetchData = async () => {
+    await Promise.all([fetchPage(currentPage), fetchSummary()]);
+  };
+
+  const fetchCompaniesOnce = async () => {
+    try {
+      const companiesData = await getCompanies();
+      setCompanies(companiesData);
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    }
+  };
+
   // Auto-refresh: Refresh data when window regains focus
   useEffect(() => {
     const handleFocus = () => {
-      fetchData();
+      fetchPage();
+      fetchSummary();
     };
 
     window.addEventListener('focus', handleFocus);
-    
+
     // Also refresh every 2 minutes
     const interval = setInterval(() => {
-      fetchData();
+      fetchPage();
+      fetchSummary();
     }, 120000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, []);
-
-  // Fetch data from Supabase
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const [historyData, companiesData] = await Promise.all([
-        getLoadingHistory(),
-        getCompanies()
-      ]);
-      setLoadingHistory(historyData);
-      setCompanies(companiesData);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery, selectedCompany, selectedType, dateFrom, dateTo, sortField, sortDirection, companies]);
 
   useEffect(() => {
-    fetchData();
+    fetchCompaniesOnce();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter data
-  const filteredHistory = useMemo(() => {
-    let filtered = [...loadingHistory];
+  // Fetch ulang saat filter/sort/page berubah (server-side)
+  useEffect(() => {
+    fetchPage();
+    fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery, selectedCompany, selectedType, dateFrom, dateTo, sortField, sortDirection, companies]);
 
-    // Filter by search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.companyName || '').toLowerCase().includes(query) ||
-        (item.pic || '').toLowerCase().includes(query)
-      );
-    }
+  // Data halaman aktif sudah difilter + disort oleh server.
+  // Alias ini dipertahankan agar sisa render tidak perlu diubah.
+  const paginatedHistory = loadingHistory;
 
-    // Filter by company
-    if (selectedCompany !== 'all') {
-      filtered = filtered.filter(item => item.company_id === parseInt(selectedCompany));
-    }
-
-    // Filter by type (loading/perawatan)
-    if (selectedType !== 'all') {
-      filtered = filtered.filter(item => item.type === selectedType);
-    }
-
-    // Filter by date range
-    if (dateFrom) {
-      filtered = filtered.filter(item => item.date >= dateFrom);
-    }
-    if (dateTo) {
-      filtered = filtered.filter(item => item.date <= dateTo);
-    }
-
-    return filtered;
-  }, [searchQuery, selectedCompany, selectedType, dateFrom, dateTo, loadingHistory]);
-
-  // Sort data
-  const sortedHistory = useMemo(() => {
-    const sorted = [...filteredHistory];
-    
-    sorted.sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortField) {
-        case 'date':
-          comparison = new Date(a.date) - new Date(b.date);
-          break;
-        case 'company':
-          comparison = (a.companyName || '').localeCompare(b.companyName || '');
-          break;
-        case 'pic':
-          comparison = (a.pic || '').localeCompare(b.pic || '');
-          break;
-        case 'photos':
-          comparison = (a.photo_count || 0) - (b.photo_count || 0);
-          break;
-        case 'created':
-          comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
-          break;
-        default:
-          comparison = new Date(a.date) - new Date(b.date);
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-    
-    return sorted;
-  }, [filteredHistory, sortField, sortDirection]);
-
-  // Pagination
-  const totalPages = Math.ceil(sortedHistory.length / ITEMS_PER_PAGE);
-  const paginatedHistory = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return sortedHistory.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [sortedHistory, currentPage]);
+  // Pagination server: total dari count Supabase + nomor halaman ringkas
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 3) return [1, 2, 3, 4, 5];
+    if (currentPage >= totalPages - 2) return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2];
+  }, [currentPage, totalPages]);
+  const pageRangeStart = totalCount === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const pageRangeEnd = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -185,12 +205,13 @@ const AdminHistory = () => {
     setSelectedItems(new Set()); // Clear selection on filter change
   }, [searchQuery, selectedCompany, selectedType, dateFrom, dateTo]);
 
-  // Hitung total media dari hasil filter
-  const totalPhotos = filteredHistory.reduce((acc, item) => acc + (item.photo_count || 0), 0);
-  const totalLoading = filteredHistory.filter(item => item.type === 'loading' || !item.type).length;
-  const totalPerawatan = filteredHistory.filter(item => item.type === 'perawatan').length;
+  // Ringkasan dari query count ringan (bukan dari full-table)
+  const totalPhotos = summary.media;
+  const totalLoading = summary.loading;
+  const totalPerawatan = summary.perawatan;
 
   const clearFilters = () => {
+    setSearchInput('');
     setSearchQuery('');
     setSelectedCompany('all');
     setSelectedType('all');
@@ -238,21 +259,60 @@ const AdminHistory = () => {
     setSelectedItems(newSelected);
   };
 
+  // Hapus foto di S3 dulu, baru record DB (foto ikut terhapus via CASCADE).
+  // Gagal hapus S3 tidak menggagalkan hapus DB — hanya dilaporkan.
+  const deleteHistoryWithMedia = async (id) => {
+    let s3deleted = 0;
+    let s3failed = 0;
+    try {
+      const photos = await getPhotosByHistoryId(id);
+      const urls = (photos || []).map(p => p.url).filter(Boolean);
+      if (urls.length > 0) {
+        const res = await deleteMultipleFromS3(urls);
+        s3deleted = res.deleted;
+        s3failed = res.failed;
+      }
+    } catch (e) {
+      console.warn(`Gagal ambil/hapus foto S3 untuk history ${id}:`, e?.message);
+    }
+    await deleteLoadingHistory(id);
+    return { s3deleted, s3failed };
+  };
+
   // Handle Multi Delete
   const handleMultiDelete = async () => {
     try {
       setIsDeleting(true);
-      
+
       const idsToDelete = Array.from(selectedItems);
+      let ok = 0;
+      let s3failedTotal = 0;
+      const failedIds = [];
       for (const id of idsToDelete) {
-        await deleteLoadingHistory(id);
+        try {
+          const r = await deleteHistoryWithMedia(id);
+          s3failedTotal += r.s3failed;
+          ok += 1;
+        } catch (e) {
+          console.error(`Gagal hapus history ${id}:`, e);
+          failedIds.push(id);
+        }
       }
-      
+
       // Refresh data
       await fetchData();
       setSelectedItems(new Set());
       setShowMultiDeleteConfirm(false);
-      
+
+      if (failedIds.length === 0) {
+        toast.success(
+          `Berhasil hapus ${ok} data beserta fotonya.` +
+          (s3failedTotal > 0 ? ` (${s3failedTotal} file S3 gagal dihapus, DB tetap bersih)` : '')
+        );
+      } else {
+        toast.error(`Berhasil hapus ${ok} data, gagal ${failedIds.length}. Coba lagi untuk sisanya.`);
+      }
+
     } catch (error) {
       console.error('Error deleting:', error);
       toast.error('Gagal menghapus: ' + error.message);
@@ -265,13 +325,21 @@ const AdminHistory = () => {
   const handleDelete = async (item) => {
     try {
       setIsDeleting(true);
-      
-      await deleteLoadingHistory(item.id);
-      
-      // Refresh data
-      await fetchData();
+
+      const r = await deleteHistoryWithMedia(item.id);
+
+      // Kalau halaman jadi kosong (item terakhir di page), mundur 1 halaman
+      if (paginatedHistory.length <= 1 && currentPage > 1) {
+        setCurrentPage(p => p - 1);
+      } else {
+        await fetchData();
+      }
       setShowDeleteConfirm(null);
-      
+      toast.success(
+        'Data beserta fotonya berhasil dihapus.' +
+        (r.s3failed > 0 ? ` (${r.s3failed} file S3 gagal dihapus, DB tetap bersih)` : '')
+      );
+
     } catch (error) {
       console.error('Error deleting:', error);
       toast.error('Gagal menghapus: ' + error.message);
@@ -286,9 +354,10 @@ const AdminHistory = () => {
     setEditingLoading(null);
   };
 
-  // Handle Export Excel
+  // Handle Export Excel — export SELURUH hasil filter (semua halaman),
+  // bukan cuma halaman aktif. Kolom Sales + sheet Rekap per Sales ikut.
   const handleExport = async () => {
-    if (filteredHistory.length === 0) {
+    if (summary.total === 0) {
       setExportStatus({
         type: 'error',
         message: 'Tidak ada data untuk diexport'
@@ -297,15 +366,20 @@ const AdminHistory = () => {
     }
 
     setIsExporting(true);
-    setExportStatus({ type: 'loading', message: 'Mempersiapkan export...' });
+    setExportStatus({ type: 'loading', message: 'Mengambil seluruh data filter...' });
 
     try {
-      const result = await exportToExcel(filteredHistory, 'report-mutiari-garden');
+      const filters = buildServerFilters();
+      delete filters.sortBy;
+      delete filters.sortDir;
+      const allData = await getLoadingHistory(filters);
+      setExportStatus({ type: 'loading', message: `Menyusun ${allData.length} baris Excel...` });
+      const result = await exportToExcel(allData, 'report-mutiari-garden', companies);
       setExportStatus({
         type: 'success',
         message: `Berhasil export ${result.count} data ke ${result.filename}`
       });
-      
+
       setTimeout(() => setExportStatus(null), 3000);
     } catch (error) {
       console.error('Export error:', error);
@@ -332,7 +406,7 @@ const AdminHistory = () => {
             </button>
             <div className="flex-1">
               <h1 className="text-lg font-bold text-gray-900">History Dokumentasi</h1>
-              <p className="text-xs text-gray-500">{filteredHistory.length} data ditemukan</p>
+              <p className="text-xs text-gray-500">{totalCount} data ditemukan</p>
             </div>
             <button
               onClick={() => fetchData()}
@@ -371,8 +445,8 @@ const AdminHistory = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     placeholder="Cari perusahaan atau PIC..."
                     className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-garden focus:ring-2 focus:ring-garden/10"
                   />
@@ -448,7 +522,7 @@ const AdminHistory = () => {
           <div className="flex flex-wrap gap-4">
             <div className="bg-white rounded-xl px-4 py-2 shadow-sm border border-gray-100">
               <span className="text-sm text-gray-500">Total: </span>
-              <span className="font-semibold text-gray-900">{filteredHistory.length}</span>
+              <span className="font-semibold text-gray-900">{summary.total}</span>
             </div>
             <div className="bg-white rounded-xl px-4 py-2 shadow-sm border border-gray-100">
               <span className="text-sm text-gray-500">Loading: </span>
@@ -479,11 +553,11 @@ const AdminHistory = () => {
             {/* Export Button */}
             <button
               onClick={handleExport}
-              disabled={isExporting || filteredHistory.length === 0}
+              disabled={isExporting || summary.total === 0}
               className={`
                 flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm
                 transition-all duration-200
-                ${isExporting || filteredHistory.length === 0
+                ${isExporting || summary.total === 0
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-600/20'
                 }
@@ -522,7 +596,7 @@ const AdminHistory = () => {
             <Loader2 className="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4" />
             <p className="text-gray-500">Memuat data history...</p>
           </div>
-        ) : filteredHistory.length > 0 ? (
+        ) : paginatedHistory.length > 0 ? (
           <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
@@ -700,12 +774,12 @@ const AdminHistory = () => {
               </div>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination (server-side, nomor ringkas max 5) */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6">
                 <p className="text-sm text-gray-500">
-                  Halaman {currentPage} dari {totalPages} 
-                  <span className="ml-2">({(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredHistory.length)} dari {filteredHistory.length})</span>
+                  Halaman {currentPage} dari {totalPages}
+                  <span className="ml-2">({pageRangeStart}-{pageRangeEnd} dari {totalCount})</span>
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -715,7 +789,7 @@ const AdminHistory = () => {
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  {pageNumbers.map(page => (
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
@@ -749,6 +823,7 @@ const AdminHistory = () => {
           </div>
         )}
       </main>
+      <AppFooter />
 
       {/* Detail Modal */}
       <LoadingDetailModal
@@ -778,6 +853,8 @@ const AdminHistory = () => {
               <p className="text-gray-500">
                 Apakah Anda yakin ingin menghapus data {showDeleteConfirm.type === 'perawatan' ? 'perawatan' : 'loading'} dari{' '}
                 <strong>{showDeleteConfirm.companyName}</strong>?
+                <br />
+                <span className="text-sm text-gray-500">Foto/video di storage ikut dihapus.</span>
                 <br />
                 <span className="text-red-500 text-sm">Tindakan ini tidak dapat dibatalkan.</span>
               </p>
@@ -817,6 +894,8 @@ const AdminHistory = () => {
               <h3 className="text-lg font-bold text-gray-900 mb-2">Hapus {selectedItems.size} Data?</h3>
               <p className="text-gray-500">
                 Apakah Anda yakin ingin menghapus <strong>{selectedItems.size}</strong> data yang dipilih?
+                <br />
+                <span className="text-sm text-gray-500">Foto/video di storage ikut dihapus.</span>
                 <br />
                 <span className="text-red-500 text-sm">Tindakan ini tidak dapat dibatalkan.</span>
               </p>

@@ -29,7 +29,10 @@ import Skeleton from '../components/Skeleton';
 import LoadingDetailModal from '../components/LoadingDetailModal';
 import EditLoadingModal from '../components/EditLoadingModal';
 import ShareLinkModal from '../components/ShareLinkModal';
-import { getCompanyBySlug, getLoadingHistory } from '../utils/supabase';
+import AppFooter from '../components/AppFooter';
+import PullIndicator from '../components/PullIndicator';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { getCompanyBySlug, getLoadingHistory, checkLoadingDuplicate } from '../utils/supabase';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -79,16 +82,21 @@ const ClientDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [company, setCompany] = useState(null);
-  const [clientLoadingHistory, setClientLoadingHistory] = useState([]);
+  // Riwayat: hanya halaman aktif yang dimuat (server-side, bukan full-table)
+  const [historyItems, setHistoryItems] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false);
   const [isPerawatanModalOpen, setIsPerawatanModalOpen] = useState(false);
+  const [isFabOpen, setIsFabOpen] = useState(false);
   const [selectedLoading, setSelectedLoading] = useState(null);
   const [editingLoading, setEditingLoading] = useState(null);
   const [expandedMonths, setExpandedMonths] = useState({});
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   
   // Search, Filter and Pagination states
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -96,20 +104,21 @@ const ClientDetail = () => {
   const [filterType, setFilterType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Auto-refresh: Refresh data when window regains focus
+  // Auto-refresh: Refresh halaman aktif saat window regain focus
+  // (tetap di halaman, tidak loncat ke halaman 1)
   useEffect(() => {
     const handleFocus = () => {
       if (company) {
-        refreshData();
+        fetchHistoryPage();
       }
     };
 
     window.addEventListener('focus', handleFocus);
-    
+
     // Also refresh every 2 minutes
     const interval = setInterval(() => {
       if (company) {
-        refreshData();
+        fetchHistoryPage();
       }
     }, 120000);
 
@@ -117,19 +126,18 @@ const ClientDetail = () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, [company]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id, currentPage, searchQuery, filterType, dateFrom, dateTo]);
 
-  // Fetch company data from Supabase
+  // Fetch company data from Supabase (satu baris saja)
   useEffect(() => {
     const fetchCompany = async () => {
       try {
         setIsLoading(true);
         const companyData = await getCompanyBySlug(slug);
-        
+
         if (companyData) {
           setCompany(companyData);
-          const historyData = await getLoadingHistory({ companyId: companyData.id });
-          setClientLoadingHistory(historyData);
         }
       } catch (error) {
         console.error('Error fetching company:', error);
@@ -140,6 +148,47 @@ const ClientDetail = () => {
 
     fetchCompany();
   }, [slug]);
+
+  // Bangun filter server dari state UI
+  const buildServerFilters = () => {
+    const f = {
+      companyId: company?.id,
+      sortBy: 'date',
+      sortDir: 'desc',
+    };
+    if (filterType !== 'all') f.type = filterType;
+    if (dateFrom) f.dateFrom = dateFrom;
+    if (dateTo) f.dateTo = dateTo;
+    if (searchQuery.trim()) f.picSearch = searchQuery.trim();
+    return f;
+  };
+
+  // Fetch halaman aktif dari server
+  const fetchHistoryPage = async (page = currentPage) => {
+    if (!company?.id) return;
+    try {
+      setListLoading(true);
+      const { data, count } = await getLoadingHistory(buildServerFilters(), { page, limit: ITEMS_PER_PAGE });
+      setHistoryItems(data || []);
+      setTotalCount(count ?? 0);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  // Debounce ketikan pencarian PIC 400ms
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Fetch ulang saat halaman/filter berubah (server-side)
+  useEffect(() => {
+    fetchHistoryPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id, currentPage, searchQuery, filterType, dateFrom, dateTo]);
   
   // Refresh data when window regains focus (user returns from admin)
   useEffect(() => {
@@ -157,40 +206,12 @@ const ClientDetail = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [company?.id, slug]);
 
-  // Filter history by search, date range, and type
-  const filteredHistory = useMemo(() => {
-    let filtered = [...clientLoadingHistory];
-    
-    // Filter by search (PIC)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.pic || '').toLowerCase().includes(query)
-      );
-    }
-    
-    // Filter by type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(item => item.type === filterType);
-    }
-    
-    // Filter by date range
-    if (dateFrom) {
-      filtered = filtered.filter(item => item.date >= dateFrom);
-    }
-    if (dateTo) {
-      filtered = filtered.filter(item => item.date <= dateTo);
-    }
-    
-    return filtered;
-  }, [clientLoadingHistory, searchQuery, filterType, dateFrom, dateTo]);
+  // Data halaman aktif sudah difilter server (company/type/date/pic).
+  // Alias dipertahankan agar render tidak perlu diubah.
+  const paginatedHistory = historyItems;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
-  const paginatedHistory = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredHistory.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredHistory, currentPage]);
+  // Pagination server: total dari count Supabase
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   // Reset page when filters change
   useEffect(() => {
@@ -219,24 +240,51 @@ const ClientDetail = () => {
     setExpandedMonths(defaultExpanded);
   }, [monthKeys.join(',')]);
 
-  // Refresh data after edit/add
+  // Refresh data: data baru selalu di halaman 1 (urutan terbaru dulu).
+  // Kalau sedang di halaman 1, fetch langsung; kalau tidak, pindah ke halaman 1
+  // dan biarkan effect yang fetch.
   const refreshData = async () => {
-    if (company) {
-      const historyData = await getLoadingHistory({ companyId: company.id });
-      setClientLoadingHistory(historyData);
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      await fetchHistoryPage(1);
     }
   };
 
-  // Check for duplicate
+  // Refresh halaman aktif (dipakai setelah edit: posisi halaman dipertahankan).
+  // Kalau halaman jadi kosong, mundur satu halaman.
+  const refreshCurrentPage = async () => {
+    await fetchHistoryPage(currentPage);
+  };
+
+  // Tarik ke bawah (HP) untuk refresh + auto-refresh saat upload background selesai
+  const { pull, refreshing } = usePullToRefresh(() => fetchHistoryPage(), !!company);
+
+  useEffect(() => {
+    const handleUploadDone = (e) => {
+      if (e?.detail?.companyId === company?.id) {
+        refreshData();
+      }
+    };
+    window.addEventListener('mg-upload-done', handleUploadDone);
+    return () => window.removeEventListener('mg-upload-done', handleUploadDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id, currentPage]);
+
+  // Check duplikat langsung ke DB (memori hanya berisi 1 halaman, tak lengkap)
   const checkDuplicate = async (date, type) => {
-    const exists = clientLoadingHistory.some(item => 
-      item.date === date && item.type === type
-    );
-    return exists;
+    if (!company?.id) return false;
+    try {
+      return await checkLoadingDuplicate(company.id, date, type);
+    } catch (e) {
+      console.warn('Gagal cek duplikat:', e?.message);
+      return false;
+    }
   };
 
   // Clear all filters
   const clearFilters = () => {
+    setSearchInput('');
     setSearchQuery('');
     setFilterType('all');
     setDateFrom('');
@@ -244,7 +292,7 @@ const ClientDetail = () => {
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchQuery || filterType !== 'all' || dateFrom || dateTo;
+  const hasActiveFilters = searchInput || searchQuery || filterType !== 'all' || dateFrom || dateTo;
 
   // Loading state
   if (isLoading) {
@@ -304,6 +352,7 @@ const ClientDetail = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PullIndicator pull={pull} refreshing={refreshing} />
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-4">
@@ -358,17 +407,6 @@ const ClientDetail = () => {
               </div>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">{company.name}</h2>
-            {company.category && (
-              <div className="mb-4">
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                  company.category === 'sewa_bulanan'
-                    ? 'bg-purple-50 text-purple-600'
-                    : 'bg-blue-50 text-blue-600'
-                }`}>
-                  {company.category === 'sewa_bulanan' ? 'Sewa Bulanan' : 'Project'}
-                </span>
-              </div>
-            )}
             <div className="space-y-3">
               {/* Alamat */}
               <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
@@ -464,14 +502,14 @@ const ClientDetail = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Cari berdasarkan PIC..."
               className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-garden focus:ring-2 focus:ring-garden/10"
             />
-            {searchQuery && (
+            {searchInput && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => setSearchInput('')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
               >
                 <span className="text-gray-500 text-xs">×</span>
@@ -548,9 +586,9 @@ const ClientDetail = () => {
           {/* Active Filters Summary */}
           {hasActiveFilters && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {searchQuery && (
+              {searchInput && (
                 <span className="text-xs px-2 py-1 rounded-lg bg-garden/10 text-garden">
-                  PIC: {searchQuery}
+                  PIC: {searchInput}
                 </span>
               )}
               {filterType !== 'all' && (
@@ -578,13 +616,20 @@ const ClientDetail = () => {
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-garden" />
               <h3 className="font-bold text-gray-900">Riwayat Dokumentasi</h3>
+              {listLoading && <Loader2 className="w-4 h-4 text-garden animate-spin" />}
             </div>
             <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-              {filteredHistory.length} data
+              {totalCount} data
             </span>
           </div>
 
-          {filteredHistory.length > 0 ? (
+          {listLoading && historyItems.length === 0 ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-2xl" />
+              ))}
+            </div>
+          ) : historyItems.length > 0 ? (
             <>
               <div className="space-y-4">
                 {monthKeys.map((monthYear) => (
@@ -674,6 +719,9 @@ const ClientDetail = () => {
                 <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
                   <p className="text-sm text-gray-500">
                     Halaman {currentPage} dari {totalPages}
+                    <span className="ml-2">
+                      ({totalCount === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} dari {totalCount})
+                    </span>
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -723,9 +771,9 @@ const ClientDetail = () => {
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-gray-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">
-                {searchQuery || hasActiveFilters ? 'Tidak ada hasil pencarian' : 'Belum ada data'}
+                {hasActiveFilters ? 'Tidak ada hasil pencarian' : 'Belum ada data'}
               </p>
-              {(searchQuery || hasActiveFilters) && (
+              {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
                   className="mt-2 text-sm text-garden hover:text-garden-dark"
@@ -737,23 +785,63 @@ const ClientDetail = () => {
           )}
         </div>
       </main>
+      <AppFooter />
 
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
-        <div className="max-w-3xl mx-auto space-y-3">
-          <button
-            onClick={() => setIsLoadingModalOpen(true)}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-garden to-garden-dark text-white font-semibold text-lg shadow-lg shadow-garden/30 flex items-center justify-center hover:shadow-xl hover:-translate-y-0.5 transition-all"
-          >
-            Input Loading
-          </button>
-          <button
-            onClick={() => setIsPerawatanModalOpen(true)}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold text-lg shadow-lg shadow-blue-500/30 flex items-center justify-center hover:shadow-xl hover:-translate-y-0.5 transition-all"
-          >
+      {/* Floating Action Buttons: speed-dial */}
+      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
+        {/* Backdrop */}
+        {isFabOpen && (
+          <div
+            className="fixed inset-0 -z-10 bg-black/30 backdrop-blur-[2px] animate-fade-in"
+            onClick={() => setIsFabOpen(false)}
+          />
+        )}
+        {/* Opsi Perawatan */}
+        <div
+          className={`flex items-center gap-3 transition-all duration-200 ${
+            isFabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none'
+          }`}
+        >
+          <span className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium shadow-lg">
             Input Perawatan
+          </span>
+          <button
+            onClick={() => { setIsFabOpen(false); setIsPerawatanModalOpen(true); }}
+            className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            title="Input Perawatan"
+          >
+            <Sparkles className="w-5 h-5" />
           </button>
         </div>
+        {/* Opsi Loading */}
+        <div
+          className={`flex items-center gap-3 transition-all duration-200 delay-75 ${
+            isFabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none'
+          }`}
+        >
+          <span className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium shadow-lg">
+            Input Loading
+          </span>
+          <button
+            onClick={() => { setIsFabOpen(false); setIsLoadingModalOpen(true); }}
+            className="w-12 h-12 rounded-full bg-gradient-to-r from-garden to-garden-dark text-white shadow-lg shadow-garden/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            title="Input Loading"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </button>
+        </div>
+        {/* Tombol utama */}
+        <button
+          onClick={() => setIsFabOpen(v => !v)}
+          className={`w-14 h-14 rounded-full text-white shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 ${
+            isFabOpen
+              ? 'bg-gray-800 shadow-gray-800/30 rotate-45'
+              : 'bg-gradient-to-r from-garden to-garden-dark shadow-garden/40'
+          }`}
+          title={isFabOpen ? 'Tutup' : 'Tambah dokumentasi'}
+        >
+          <Plus className="w-7 h-7" />
+        </button>
       </div>
 
       {/* Input Modal */}
@@ -789,7 +877,7 @@ const ClientDetail = () => {
         isOpen={!!editingLoading}
         onClose={() => setEditingLoading(null)}
         loadingData={editingLoading}
-        onSuccess={refreshData}
+        onSuccess={refreshCurrentPage}
       />
 
       {/* Share Portal Modal */}

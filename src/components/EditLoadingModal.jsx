@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/date';
 import { uploadMultipleToS3, deleteFromS3 } from '../utils/s3Config';
-import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId } from '../utils/supabase';
+import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, checkLoadingDuplicate } from '../utils/supabase';
 import { createMediaItemsFromFiles, formatDuration, getMediaTypeFromUrl, getMediaUploadSuccessMessage } from '../utils/media';
 
 const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
@@ -115,6 +115,27 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
 
   const handleSubmit = async () => {
     if (!date || !pic) return;
+
+    // Jika tanggal diubah, pastikan tidak menabrak data lain (UNIQUE company,date,type)
+    if (date !== loadingData.date) {
+      try {
+        const clash = await checkLoadingDuplicate(
+          loadingData.company_id, date, loadingData.type, loadingData.id
+        );
+        if (clash) {
+          setUploadStatus('error');
+          setErrorMessage(
+            loadingData.type === 'perawatan'
+              ? 'Sudah ada data perawatan untuk perusahaan ini pada tanggal tersebut.'
+              : 'Sudah ada data loading untuk perusahaan ini pada tanggal tersebut.'
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('Gagal cek duplikat saat edit:', e?.message);
+      }
+    }
 
     if (photosToDelete.length > 0) {
       const confirmed = window.confirm(

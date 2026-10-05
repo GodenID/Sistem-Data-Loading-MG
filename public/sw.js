@@ -29,8 +29,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   
-  // Skip API requests
-  if (event.request.url.includes('supabase') || 
+  // Skip API requests (backend Coolify + S3) — jangan di-cache
+  if (event.request.url.includes('/api/') ||
       event.request.url.includes('onidel') ||
       event.request.url.includes('s3')) {
     return;

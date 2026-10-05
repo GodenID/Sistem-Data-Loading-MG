@@ -1,21 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 const AdminContext = createContext(null);
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
 
 export const AdminProvider = ({ children }) => {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Cek session saat load
-    const adminSession = sessionStorage.getItem('adminSession');
-    if (adminSession === 'true') {
-      setIsAdmin(true);
-    }
-    setLoading(false);
-  }, []);
+  // Baca session secara synchronous agar refresh halaman admin
+  // tidak kedip loading/login dulu.
+  const [isAdmin, setIsAdmin] = useState(
+    () => sessionStorage.getItem('adminSession') === 'true'
+  );
+  const [loading, setLoading] = useState(false);
 
   const login = (password) => {
     if (password === ADMIN_PASSWORD) {

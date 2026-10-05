@@ -151,14 +151,28 @@ export const uploadMultipleToS3 = async (files, companyName, date, type = 'loadi
 export const deleteFromS3 = async (fileUrlOrKey) => {
   try {
     const s3 = getS3Client();
-    
+
     // Determine if it's a URL or a key
     let key = fileUrlOrKey;
     if (fileUrlOrKey.startsWith('http')) {
-      // Extract key dari URL
+      // Extract key dari URL: https://endpoint/bucket/key -> key
       const url = new URL(fileUrlOrKey);
-      key = url.pathname.substring(1); // Remove leading slash
+      key = decodeURIComponent(url.pathname.substring(1)); // Remove leading slash
+      // URL mengandung prefix bucket (endpoint/bucket/key), sedangkan
+      // deleteObject butuh Key tanpa nama bucket -> strip prefix bucket/
+      const bucketPrefix = `${S3_CONFIG.bucket}/`;
+      if (key.startsWith(bucketPrefix)) {
+        key = key.slice(bucketPrefix.length);
+      }
+    } else {
+      key = decodeURIComponent(key);
+      const bucketPrefix = `${S3_CONFIG.bucket}/`;
+      if (key.startsWith(bucketPrefix)) {
+        key = key.slice(bucketPrefix.length);
+      }
     }
+
+    if (!key) throw new Error('Key file kosong');
 
     const params = {
       Bucket: S3_CONFIG.bucket,
@@ -171,6 +185,29 @@ export const deleteFromS3 = async (fileUrlOrKey) => {
     console.error('Error deleting from S3:', error);
     throw new Error(`Gagal hapus file: ${error.message}`);
   }
+};
+
+/**
+ * Hapus banyak file dari S3. Gagal per-file tidak menggagalkan keseluruhan,
+ * hasilnya dilaporkan per file agar pemanggil bisa lanjut hapus DB.
+ * @param {string[]} urlsOrKeys
+ * @returns {Promise<{deleted: number, failed: number}>}
+ */
+export const deleteMultipleFromS3 = async (urlsOrKeys = []) => {
+  let deleted = 0;
+  let failed = 0;
+  await Promise.all(
+    urlsOrKeys.map(async (u) => {
+      try {
+        await deleteFromS3(u);
+        deleted += 1;
+      } catch (e) {
+        console.warn('Gagal hapus file S3:', u, e?.message);
+        failed += 1;
+      }
+    })
+  );
+  return { deleted, failed };
 };
 
 /**

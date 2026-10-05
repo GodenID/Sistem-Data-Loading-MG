@@ -24,9 +24,10 @@ import { downloadPhotosAsZip } from '../utils/downloadZip';
 import { getPhotosByHistoryId, deletePhotoRecord, updateLoadingHistory } from '../utils/supabase';
 import { deleteFromS3 } from '../utils/s3Config';
 import { getMediaTypeFromUrl } from '../utils/media';
+import Lightbox from './Lightbox';
 
 const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState(null);
   const [photos, setPhotos] = useState([]);
@@ -66,7 +67,7 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      setSelectedPhoto(null);
+      setLightboxIndex(null);
       setDownloadStatus(null);
       setPhotos([]);
       setSelectedIds(new Set());
@@ -77,23 +78,6 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
       document.body.style.overflow = '';
     };
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!selectedPhoto) return;
-    const handleKey = (e) => {
-      if (e.key === 'Escape') { setSelectedPhoto(null); return; }
-      if (e.key === 'ArrowLeft') {
-        const newIndex = selectedPhoto.index > 0 ? selectedPhoto.index - 1 : photos.length - 1;
-        setSelectedPhoto({ ...photos[newIndex], index: newIndex });
-      }
-      if (e.key === 'ArrowRight') {
-        const newIndex = selectedPhoto.index < photos.length - 1 ? selectedPhoto.index + 1 : 0;
-        setSelectedPhoto({ ...photos[newIndex], index: newIndex });
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [selectedPhoto, photos]);
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -431,7 +415,7 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                       {/* Click to view fullscreen */}
                       <div
                         className="absolute inset-0 cursor-pointer z-0"
-                        onClick={() => setSelectedPhoto({ ...photo, index })}
+                        onClick={() => setLightboxIndex(index)}
                       >
                         {photo.mediaType === 'video' ? (
                           <>
@@ -506,68 +490,13 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
         </div>
 
         {/* Photo Lightbox */}
-        {selectedPhoto && (
-          <div 
-            className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 animate-fade-in"
-            onClick={() => setSelectedPhoto(null)}
-          >
-            <button
-              onClick={() => setSelectedPhoto(null)}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            
-            {photos.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => {
-                  e.stopPropagation();
-                  const newIndex = selectedPhoto.index > 0 ? selectedPhoto.index - 1 : photos.length - 1;
-                  setSelectedPhoto({ ...photos[newIndex], index: newIndex });
-                }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => {
-                  e.stopPropagation();
-                  const newIndex = selectedPhoto.index < photos.length - 1 ? selectedPhoto.index + 1 : 0;
-                  setSelectedPhoto({ ...photos[newIndex], index: newIndex });
-                }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </>
-            )}
-            
-            {selectedPhoto.mediaType === 'video' ? (
-              <video
-                src={selectedPhoto.url}
-                className="max-w-full max-h-[85vh] rounded-lg"
-                controls
-                autoPlay
-                playsInline
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <img
-                src={selectedPhoto.url}
-                alt={`Media ${selectedPhoto.index + 1}`}
-                className="max-w-full max-h-[85vh] object-contain rounded-lg"
-                onClick={(e) => e.stopPropagation()}
-              />
-            )}
-            <p className="absolute bottom-4 left-0 right-0 text-center text-white/80 text-sm">
-              Media {selectedPhoto.index + 1} dari {photos.length}
-            </p>
-          </div>
+        {lightboxIndex !== null && photos.length > 0 && (
+          <Lightbox
+            items={photos.map(p => ({ url: p.url, mediaType: p.mediaType, filename: p.filename }))}
+            index={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onIndex={setLightboxIndex}
+          />
         )}
 
         {/* Delete Confirmation Modal */}

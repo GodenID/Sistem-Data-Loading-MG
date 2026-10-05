@@ -68,6 +68,30 @@ body {
   animation: slideUp 0.3s ease-out;
 }
 
+/* Transisi antar halaman: fade + geser halus, tanpa kedip putih */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none;
+  }
+}
+
 /* Hide scrollbar for horizontal scroll */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

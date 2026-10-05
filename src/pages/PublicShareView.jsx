@@ -20,21 +20,23 @@ import {
 } from 'lucide-react';
 import { validateShareLink, accessShareLink } from '../utils/shareLink';
 import Skeleton from '../components/Skeleton';
+import Lightbox from '../components/Lightbox';
 import { getPhotosByHistoryId } from '../utils/supabase';
+import { APP_VERSION } from '../utils/version';
 import { downloadPhotosAsZip } from '../utils/downloadZip';
 import { getMediaTypeFromUrl } from '../utils/media';
 
 const PublicShareView = () => {
   const { token } = useParams();
   const navigate = useNavigate();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isPasswordRequired, setIsPasswordRequired] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [shareData, setShareData] = useState(null);
   const [photos, setPhotos] = useState([]);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
@@ -42,23 +44,6 @@ const PublicShareView = () => {
       validateToken();
     }
   }, [token]);
-
-  useEffect(() => {
-    if (!selectedPhoto) return;
-    const handleKey = (e) => {
-      if (e.key === 'Escape') { setSelectedPhoto(null); return; }
-      if (e.key === 'ArrowLeft') {
-        const newIndex = selectedPhoto.index > 0 ? selectedPhoto.index - 1 : photos.length - 1;
-        setSelectedPhoto({ url: photos[newIndex], index: newIndex, mediaType: getMediaTypeFromUrl(photos[newIndex]) });
-      }
-      if (e.key === 'ArrowRight') {
-        const newIndex = selectedPhoto.index < photos.length - 1 ? selectedPhoto.index + 1 : 0;
-        setSelectedPhoto({ url: photos[newIndex], index: newIndex, mediaType: getMediaTypeFromUrl(photos[newIndex]) });
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [selectedPhoto, photos]);
 
   const validateToken = async () => {
     try {
@@ -397,7 +382,7 @@ const PublicShareView = () => {
                 return (
                   <div 
                     key={index}
-                    onClick={() => setSelectedPhoto({ url: photoUrl, index, mediaType })}
+                    onClick={() => setLightboxIndex(index)}
                     className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-blue-400 transition-all duration-200 group relative bg-gray-100`}
                   >
                     {mediaType === 'video' ? (
@@ -440,70 +425,20 @@ const PublicShareView = () => {
             Link aktif hingga: {shareData.expires_at 
               ? new Date(shareData.expires_at).toLocaleDateString('id-ID') 
               : 'Tidak ada batas waktu'}
+            <br />
+            v{APP_VERSION}
           </p>
         </div>
       </main>
 
       {/* Photo Lightbox */}
-      {selectedPhoto && (
-        <div 
-          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <button
-            onClick={() => setSelectedPhoto(null)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          
-          {/* Navigation */}
-          {photos.length > 1 && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const newIndex = selectedPhoto.index > 0 ? selectedPhoto.index - 1 : photos.length - 1;
-                  setSelectedPhoto({ url: photos[newIndex], index: newIndex, mediaType: getMediaTypeFromUrl(photos[newIndex]) });
-                }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-              >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const newIndex = selectedPhoto.index < photos.length - 1 ? selectedPhoto.index + 1 : 0;
-                  setSelectedPhoto({ url: photos[newIndex], index: newIndex, mediaType: getMediaTypeFromUrl(photos[newIndex]) });
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-              >
-                <ArrowLeft className="w-6 h-6 rotate-180" />
-              </button>
-            </>
-          )}
-          
-          {selectedPhoto.mediaType === 'video' ? (
-            <video
-              src={selectedPhoto.url}
-              className="max-w-full max-h-[85vh] rounded-lg"
-              controls
-              autoPlay
-              playsInline
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={selectedPhoto.url}
-              alt={`Media ${selectedPhoto.index + 1}`}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          <p className="absolute bottom-4 left-0 right-0 text-center text-white/80 text-sm">
-            Media {selectedPhoto.index + 1} dari {photos.length}
-          </p>
-        </div>
+      {lightboxIndex !== null && photos.length > 0 && (
+        <Lightbox
+          items={photos.map(url => ({ url, mediaType: getMediaTypeFromUrl(url) }))}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onIndex={setLightboxIndex}
+        />
       )}
     </div>
   );

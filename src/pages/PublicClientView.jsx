@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import { validateCompanyShareLink, accessCompanyShareLink } from '../utils/shareLink';
 import Skeleton from '../components/Skeleton';
+import Lightbox from '../components/Lightbox';
 import { getLoadingHistory, getPhotosByHistoryId } from '../utils/supabase';
+import { APP_VERSION } from '../utils/version';
 import { downloadPhotosAsZip } from '../utils/downloadZip';
 import { getMediaTypeFromUrl } from '../utils/media';
 
@@ -52,21 +54,6 @@ const PublicClientView = () => {
       validateToken();
     }
   }, [token]);
-
-  useEffect(() => {
-    if (lightboxIndex === null) return;
-    const handleKey = (e) => {
-      if (e.key === 'Escape') { setLightboxIndex(null); return; }
-      if (e.key === 'ArrowLeft') {
-        setLightboxIndex(prev => prev > 0 ? prev - 1 : selectedPhotos.length - 1);
-      }
-      if (e.key === 'ArrowRight') {
-        setLightboxIndex(prev => prev < selectedPhotos.length - 1 ? prev + 1 : 0);
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [lightboxIndex, selectedPhotos.length]);
 
   const validateToken = async () => {
     try {
@@ -569,9 +556,11 @@ const PublicClientView = () => {
           <p className="text-xs text-gray-400">
             Portal ini dibagikan oleh Mutiari Garden.
             <br />
-            Link aktif hingga: {shareData.expires_at 
-              ? new Date(shareData.expires_at).toLocaleDateString('id-ID') 
+            Link aktif hingga: {shareData.expires_at
+              ? new Date(shareData.expires_at).toLocaleDateString('id-ID')
               : 'Tidak ada batas waktu'}
+            <br />
+            v{APP_VERSION}
           </p>
         </div>
       </main>
@@ -713,68 +702,12 @@ const PublicClientView = () => {
 
       {/* Lightbox */}
       {lightboxIndex !== null && selectedPhotos.length > 0 && (
-        <div 
-          className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setLightboxIndex(null)}
-        >
-          {/* Close Button */}
-          <button
-            onClick={() => setLightboxIndex(null)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors z-10"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          
-          {/* Navigation - Previous */}
-          {selectedPhotos.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxIndex(prev => prev > 0 ? prev - 1 : selectedPhotos.length - 1);
-              }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-          )}
-          
-          {/* Navigation - Next */}
-          {selectedPhotos.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxIndex(prev => prev < selectedPhotos.length - 1 ? prev + 1 : 0);
-              }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6 rotate-180" />
-            </button>
-          )}
-          
-          {/* Media */}
-          {getMediaTypeFromUrl(selectedPhotos[lightboxIndex]) === 'video' ? (
-            <video
-              src={selectedPhotos[lightboxIndex]}
-              className="max-w-full max-h-[85vh] rounded-lg"
-              controls
-              autoPlay
-              playsInline
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={selectedPhotos[lightboxIndex]}
-              alt={`Media ${lightboxIndex + 1}`}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          
-          {/* Counter */}
-          <p className="absolute bottom-4 left-0 right-0 text-center text-white/80 text-sm">
-            Media {lightboxIndex + 1} dari {selectedPhotos.length}
-          </p>
-        </div>
+        <Lightbox
+          items={selectedPhotos.map(url => ({ url, mediaType: getMediaTypeFromUrl(url) }))}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onIndex={setLightboxIndex}
+        />
       )}
     </div>
   );

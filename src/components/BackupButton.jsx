@@ -8,7 +8,7 @@ import {
   Calendar,
   HardDrive
 } from 'lucide-react';
-import { getCompanies, getLoadingHistory, supabase } from '../utils/supabase';
+import { getCompanies, getLoadingHistory } from '../utils/supabase';
 import { uploadToS3 } from '../utils/s3Config';
 
 const BackupButton = () => {

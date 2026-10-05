@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
-    "@supabase/supabase-js": "^2.96.0",
     "@tailwindcss/postcss": "^4.1.18",
     "aws-sdk": "^2.1693.0",
     "chart.js": "^4.5.1",

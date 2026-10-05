@@ -2,15 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { toast } from '../utils/toast';
 import {
   X, Calendar, User, Building2, Camera, Video,
-  Upload, Trash2, Loader2, CheckCircle2, AlertCircle,
-  XCircle, WifiOff, FileText, Sparkles
+  Upload, Trash2, Loader2, CheckCircle2,
+  FileText, Sparkles
 } from 'lucide-react';
 import { getTodayDate, formatDate } from '../utils/date';
-import { uploadMultipleToS3 } from '../utils/s3Config';
-import { addLoadingHistory, addPhotos } from '../utils/supabase';
-import { compressMultipleImages, formatFileSize, calculateSavings } from '../utils/imageCompression';
-import { logError, trackUploadAttempt, ERROR_TYPES } from '../utils/errorTracking';
-import { createMediaItemsFromFiles, formatDuration, getMediaUploadSuccessMessage } from '../utils/media';
+import { checkLoadingDuplicate } from '../utils/supabase';
+import { compressMultipleImages, calculateSavings } from '../utils/imageCompression';
+import { createMediaItemsFromFiles, formatDuration } from '../utils/media';
+import { useUploadQueue } from '../context/UploadQueueContext';
 
 const CONFIG = {
   loading: {
@@ -67,18 +66,15 @@ const CONFIG = {
   }
 };
 
-const DocumentationModal = ({ isOpen, onClose, companyName, companyId, onSuccess, checkDuplicate, type = 'loading' }) => {
+const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDuplicate, type = 'loading' }) => {
   const cfg = CONFIG[type] || CONFIG.loading;
+  const { enqueueUpload } = useUploadQueue();
 
   const [date, setDate] = useState(getTodayDate());
   const [pic, setPic] = useState('');
   const [photos, setPhotos] = useState([]);
   const [catatan, setCatatan] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [compressionStats, setCompressionStats] = useState(null);
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -88,9 +84,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, onSuccess
       setPic('');
       setPhotos([]);
       setCatatan('');
-      setUploadProgress(0);
-      setUploadStatus('');
-      setErrorMessage('');
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -168,6 +162,7 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, onSuccess
   const handleSubmit = async () => {
     if (!date || !pic || photos.length === 0 || !companyId) return;
 
+    // Cek cepat dari memori (data yang sudah dimuat di halaman)
     if (checkDuplicate) {
       const isDuplicate = await checkDuplicate(date, cfg.duplicateType);
       if (isDuplicate) {
@@ -178,149 +173,44 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, onSuccess
       }
     }
 
-    setIsSubmitting(true);
-    setUploadStatus('compressing');
-    setUploadProgress(0);
-    setErrorMessage('');
-    setCompressionStats(null);
-
-    let totalOriginal = photos.reduce((sum, p) => sum + (p.originalSize || p.file.size), 0);
-    let totalCompressed = totalOriginal;
-
+    // Cek otoritatif ke DB SEBELUM upload — cegah file orphan di S3
+    // dan race-condition antar perangkat.
     try {
-      setUploadStatus('compressing');
-      const uncompressedPhotos = photos.filter(p => p.isCompressing || !p.compressedSize);
-      const alreadyCompressed = photos.filter(p => !p.isCompressing && p.compressedSize);
-
-      let allPhotos = [...alreadyCompressed];
-
-      if (uncompressedPhotos.length > 0) {
-        const compressed = await compressMultipleImages(
-          uncompressedPhotos,
-          (done, total) => setUploadProgress(Math.round((done / total) * 30)),
-          { maxWidth: 1920, maxHeight: 1920, quality: 0.9 }
+      const existsInDb = await checkLoadingDuplicate(companyId, date, cfg.duplicateType);
+      if (existsInDb) {
+        const confirmed = window.confirm(
+          `${cfg.duplicateMsg}\n\nData sudah tercatat di database. Tetap tambah lagi?`
         );
-        allPhotos = [...alreadyCompressed, ...compressed];
+        if (!confirmed) return;
       }
+    } catch (e) {
+      // Gagal cek DB bukan alasan blokir — constraint UNIQUE di DB
+      // tetap jadi pengaman terakhir saat insert.
+      console.warn('Gagal cek duplikat ke DB:', e?.message);
+    }
 
-      totalOriginal = allPhotos.reduce((sum, p) => sum + (p.originalSize || p.file.size), 0);
-      totalCompressed = allPhotos.reduce((sum, p) => sum + (p.compressedSize || p.file.size), 0);
-      setCompressionStats({
-        original: totalOriginal,
-        compressed: totalCompressed,
-        saved: totalOriginal - totalCompressed,
-        percentage: ((totalOriginal - totalCompressed) / totalOriginal * 100).toFixed(0)
-      });
-
-      setUploadStatus('uploading');
-      const totalPhotos = allPhotos.length;
-      let completedPhotos = 0;
-
-      const progressInterval = setInterval(() => {
-        if (completedPhotos < totalPhotos) {
-          const progress = 30 + Math.min(
-            Math.round(((completedPhotos + 0.5) / totalPhotos) * 40),
-            39
-          );
-          setUploadProgress(progress);
-        }
-      }, 300);
-
-      const uploadedPhotos = await uploadMultipleToS3(allPhotos, companyName, date, type);
-
-      clearInterval(progressInterval);
-      completedPhotos = totalPhotos;
-      setUploadProgress(70);
-
-      setUploadStatus('saving');
-      setUploadProgress(80);
-
-      const historyData = {
-        company_id: companyId,
-        date: date,
-        pic: pic.trim(),
-        type: type,
-        photo_count: photos.length,
-        catatan: catatan.trim() || null
-      };
-
-      const savedHistory = await addLoadingHistory(historyData);
-
-      const photoRecords = uploadedPhotos.map((photo, index) => ({
-        history_id: savedHistory.id,
-        url: photo.url,
-        filename: photo.name,
-        size_bytes: photo.size,
-        sort_order: index + 1
-      }));
-
-      await addPhotos(photoRecords);
-      setUploadProgress(100);
-
-      setUploadStatus('success');
-
-      trackUploadAttempt(true, {
-        photoCount: photos.length,
-        totalSize: totalCompressed,
-        compressionRatio: parseFloat(((totalOriginal - totalCompressed) / totalOriginal * 100).toFixed(2))
-      });
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      setTimeout(() => {
-        onClose();
-      }, 2000);
-
-    } catch (error) {
-      console.error(`Error submitting ${type}:`, error);
-      setUploadStatus('error');
-      setErrorMessage(
-        error.message || 'Terjadi kesalahan saat mengupload data. Silakan coba lagi.'
-      );
-
-      let errorType = ERROR_TYPES.OTHER;
-      if (error.message?.includes('upload') || error.message?.includes('S3')) {
-        errorType = ERROR_TYPES.UPLOAD;
-      } else if (error.message?.includes('compress')) {
-        errorType = ERROR_TYPES.COMPRESSION;
-      } else if (error.message?.includes('network') || error.message?.includes('connection')) {
-        errorType = ERROR_TYPES.NETWORK;
-      } else if (error.message?.includes('database') || error.message?.includes('supabase')) {
-        errorType = ERROR_TYPES.DATABASE;
-      }
-
-      logError({
-        type: errorType,
-        message: error.message || `${type} upload failed`,
+    // Masuk antrean upload background -> modal langsung tutup, user bisa lanjut kerja.
+    // Progres + retry tampil di dock kiri bawah; halaman refresh via event mg-upload-done.
+    // (Pipeline blocking lama dipindah ke utils/processUpload.js)
+    setIsSubmitting(true);
+    try {
+      enqueueUpload({
+        files: photos,
+        companyName,
         companyId,
-        context: {
-          photoCount: photos.length,
-          uploadStatus,
-          companyName,
-          type
-        }
+        date,
+        pic: pic.trim(),
+        type,
+        catatan: catatan.trim() || null,
       });
-
-      trackUploadAttempt(false, {
-        photoCount: photos.length,
-        totalSize: totalOriginal
-      });
-
+      toast.info('Mengupload di background — bisa lanjut kerja lain');
+      onClose();
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleRetry = () => {
-    setUploadStatus('');
-    setErrorMessage('');
-    setUploadProgress(0);
-    setIsSubmitting(false);
-  };
-
   const isFormValid = date && pic.trim() && photos.length > 0 && companyId;
-  const successMessage = getMediaUploadSuccessMessage(photos);
   const HeaderIcon = cfg.headerIcon;
 
   if (!isOpen) return null;
@@ -333,103 +223,8 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, onSuccess
         ref={modalRef}
         className="relative w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden animate-slide-up flex flex-col"
       >
-        {isSubmitting && uploadStatus !== 'error' && (
-          <div className="absolute inset-0 z-30 bg-white flex flex-col items-center justify-center p-8">
-            <div className="w-full max-w-xs">
-              <div className="flex justify-center mb-6">
-                {uploadStatus === 'compressing' && (
-                  <div className="w-20 h-20 rounded-full bg-purple-100 flex items-center justify-center">
-                    <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
-                  </div>
-                )}
-                {uploadStatus === 'uploading' && (
-                  <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Upload className="w-10 h-10 text-blue-600 animate-bounce" />
-                  </div>
-                )}
-                {uploadStatus === 'saving' && (
-                  <div className={`w-20 h-20 rounded-full ${cfg.savingBg} flex items-center justify-center`}>
-                    <Loader2 className={`w-10 h-10 ${cfg.savingIconColor} animate-spin`} />
-                  </div>
-                )}
-                {uploadStatus === 'success' && (
-                  <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center animate-scale-in">
-                    <CheckCircle2 className="w-10 h-10 text-green-600" />
-                  </div>
-                )}
-              </div>
-
-              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
-                {uploadStatus === 'compressing' && 'Menyiapkan Media...'}
-                {uploadStatus === 'uploading' && 'Mengupload Media...'}
-                {uploadStatus === 'saving' && 'Menyimpan Data...'}
-                {uploadStatus === 'success' && successMessage}
-              </h3>
-
-              <p className="text-gray-500 text-center text-sm mb-6">
-                {uploadStatus === 'compressing' && 'Mengompres foto dan memvalidasi video max 1 menit'}
-                {uploadStatus === 'uploading' && `Mengupload ${photos.length} media ke server`}
-                {uploadStatus === 'saving' && 'Menyimpan data ke database'}
-                {uploadStatus === 'success' && compressionStats && (
-                  <>
-                    {compressionStats.saved > 0
-                      ? `Hemat ${formatFileSize(compressionStats.saved)} (${compressionStats.percentage}%)`
-                      : 'Video disimpan original agar kualitas tetap'}
-                  </>
-                )}
-              </p>
-
-              <div className="relative">
-                <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      uploadStatus === 'success'
-                        ? 'bg-green-500'
-                        : `bg-gradient-to-r ${cfg.progressBarGradient}`
-                    }`}
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="text-center text-sm font-semibold text-gray-700 mt-2">
-                  {uploadProgress}%
-                </p>
-              </div>
-
-              {uploadStatus === 'uploading' && (
-                <p className="text-center text-xs text-gray-400 mt-4">
-                  Mohon tunggu, jangan tutup halaman ini
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {uploadStatus === 'error' && (
-          <div className="absolute inset-0 z-30 bg-white flex flex-col items-center justify-center p-8 animate-fade-in">
-            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <WifiOff className="w-10 h-10 text-red-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Gagal</h3>
-            <p className="text-gray-500 text-center mb-6">
-              {errorMessage}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => onClose()}
-                className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
-              >
-                Tutup
-              </button>
-              <button
-                onClick={handleRetry}
-                className={`px-6 py-3 rounded-xl bg-gradient-to-r ${cfg.buttonGradient} text-white font-medium hover:shadow-lg transition-all`}
-              >
-                Coba Lagi
-              </button>
-            </div>
-          </div>
-        )}
-
+        {/* Catatan: progres upload tampil di dock kiri bawah (non-blocking),
+            jadi tidak ada lagi overlay pengunci di sini. */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${cfg.headerIconBg} flex items-center justify-center`}>
