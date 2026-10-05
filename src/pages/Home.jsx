@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Building2, Shield, Users, Package, Image, Clock, RotateCcw, Sparkles, User, LogOut, CheckCircle2, ChevronLeft, ChevronRight, Calendar, MapPin, Activity } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import CompanyCard from '../components/CompanyCard';
@@ -11,6 +11,7 @@ import { getCompanies, getCompaniesCount, getActiveCompanyIds, getLoadingHistory
 import { createSlug } from '../utils/slug';
 import { APP_VERSION } from '../utils/version';
 import { useAuth } from '../context/AuthContext';
+import { toast } from '../utils/toast';
 
 const ROTATION_PER_PAGE = 50;
 const SEARCH_LIMIT = 20;
@@ -39,7 +40,17 @@ const twoMonthsAgoStr = () => {
 
 const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+
+  // Staff yang nekat buka /admin dilempar ke sini dengan pesan penolakan.
+  useEffect(() => {
+    if (location.state?.denied) {
+      toast.error('Akses ditolak: hanya admin yang boleh masuk panel.');
+      navigate('.', { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Gembok password home sudah dihapus (auth beneran via login).
   // isAuthenticated dipertahankan sebagai true agar logika fetch tidak berubah.
   const [isAuthenticated] = useState(true);

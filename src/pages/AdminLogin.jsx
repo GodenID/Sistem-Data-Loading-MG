@@ -16,10 +16,15 @@ const AdminLogin = () => {
   const from = location.state?.from;
 
   const goAfterLogin = (role) => {
-    if (role === 'admin') {
-      navigate(typeof from === 'string' && from.startsWith('/admin') ? from : '/admin', { replace: true });
+    // Semua orang mendarat di halaman utama dulu.
+    // Admin yang tadinya mau ke panel (from) dikembalikan ke sana,
+    // selebihnya admin pun mulai dari halaman utama (ada tombol Admin Panel).
+    if (role === 'admin' && typeof from === 'string' && from.startsWith('/admin')) {
+      navigate(from, { replace: true });
+    } else if (role !== 'admin' && typeof from === 'string' && !from.startsWith('/admin')) {
+      navigate(from, { replace: true });
     } else {
-      navigate(typeof from === 'string' && !from.startsWith('/admin') ? from : '/', { replace: true });
+      navigate('/', { replace: true });
     }
   };
 
