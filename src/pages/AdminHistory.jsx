@@ -396,35 +396,35 @@ const AdminHistory = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => navigate('/admin')}
-              className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900">History Dokumentasi</h1>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">History Dokumentasi</h1>
               <p className="text-xs text-gray-500">{totalCount} data ditemukan</p>
             </div>
             <button
               onClick={() => fetchData()}
-              className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors mr-2"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors shrink-0"
               title="Refresh Data"
             >
               <RefreshCw className="w-5 h-5 text-gray-600" />
             </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-medium text-sm transition-colors shrink-0 ${
                 showFilters || hasActiveFilters
                   ? 'bg-garden text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Filter className="w-4 h-4" />
-              <span>Filter</span>
+              <span className="hidden sm:inline">Filter</span>
               {hasActiveFilters && (
                 <span className="ml-1 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs">!</span>
               )}

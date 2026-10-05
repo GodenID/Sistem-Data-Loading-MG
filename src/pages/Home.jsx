@@ -339,32 +339,36 @@ const Home = () => {
       <PullIndicator pull={pull} refreshing={refreshing} />
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img 
-                src="/logo.png" 
-                alt="Mutiari Garden" 
-                className="h-14 w-auto object-contain"
+        <div className="max-w-3xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <img
+                src="/logo.png"
+                alt="Mutiari Garden"
+                className="h-10 sm:h-14 w-auto object-contain shrink-0"
               />
-              <div>
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">Mutiari Garden</h1>
-                <p className="text-xs text-gray-500">Report Dokumentasi</p>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">Mutiari Garden</h1>
+                <p className="text-[11px] sm:text-xs text-gray-500 truncate">Report Dokumentasi</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {user?.role === 'admin' && (
                 <button
                   onClick={() => navigate('/admin')}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
+                  title="Admin Panel"
+                  className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:gap-2 sm:px-3 sm:py-2 rounded-full sm:rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
                 >
                   <Shield className="w-4 h-4" />
                   <span className="hidden sm:inline">Admin</span>
                 </button>
               )}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-garden/10 text-garden-dark text-sm font-medium">
+              <div
+                title={user?.name || user?.username}
+                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:gap-2 sm:px-3 sm:py-2 rounded-full sm:rounded-xl bg-garden/10 text-garden-dark text-sm font-medium"
+              >
                 <User className="w-4 h-4" />
-                <span className="hidden sm:inline">{user?.name || user?.username}</span>
+                <span className="hidden sm:inline max-w-[120px] truncate">{user?.name || user?.username}</span>
               </div>
               <button
                 onClick={async () => {
@@ -372,7 +376,7 @@ const Home = () => {
                   navigate('/login', { replace: true });
                 }}
                 title="Keluar"
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
+                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:gap-2 sm:px-3 sm:py-2 rounded-full sm:rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm font-medium"
               >
                 <LogOut className="w-4 h-4" />
               </button>

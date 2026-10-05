@@ -59,18 +59,18 @@ const AdminLogin = () => {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-gray-50">
       {/* Panel branding — penuh di desktop, ringkas di HP */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-garden-dark via-garden to-emerald-600 text-white px-6 py-8 sm:p-10 lg:p-12 lg:w-[45%] lg:min-h-screen flex flex-col justify-center">
+      <div className="relative overflow-hidden bg-gradient-to-br from-garden-dark via-garden to-emerald-600 text-white px-5 py-6 sm:p-10 lg:p-12 lg:w-[45%] lg:min-h-screen flex flex-col justify-center">
         {/* Dekorasi lingkaran */}
         <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-28 -left-20 w-80 h-80 rounded-full bg-black/10" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white p-1.5 shadow-lg shrink-0">
+        <div className="relative flex items-center gap-2.5 sm:gap-3">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-white p-1.5 shadow-lg shrink-0">
             <img src="/logo.png" alt="Mutiari Garden" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold leading-tight">Mutiari Garden</h1>
-            <p className="text-white/80 text-xs sm:text-sm">Sistem Data Loading</p>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold leading-tight truncate">Mutiari Garden</h1>
+            <p className="text-white/80 text-[11px] sm:text-sm">Sistem Data Loading</p>
           </div>
           <span className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/20 backdrop-blur">
             V{APP_VERSION}
@@ -98,10 +98,10 @@ const AdminLogin = () => {
       </div>
 
       {/* Form */}
-      <div className="flex-1 flex items-center justify-center px-4 py-8 sm:p-10">
+      <div className="flex-1 flex items-start sm:items-center justify-center px-4 py-6 sm:p-10">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8">
-            <h2 className="text-2xl font-bold text-gray-900">Selamat datang</h2>
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-5 sm:p-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Selamat datang</h2>
             <p className="text-sm text-gray-500 mt-1 mb-6">
               Wajib login untuk mengupload dokumentasi loading / perawatan
             </p>
