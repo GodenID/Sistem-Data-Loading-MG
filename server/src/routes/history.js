@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyNewUpload } = require('../notify');
 
 const router = express.Router();
 
@@ -321,6 +322,17 @@ router.post('/', async (req, res) => {
       }
     }
     const withCrew = await attachCrew([mapRow(rows[0])]);
+    // Notifikasi Telegram (gagal kirim tidak menggagalkan insert)
+    try {
+      const comp = await pool.query('SELECT name, slug FROM companies_reports WHERE id = $1', [company_id]);
+      await notifyNewUpload(
+        rows[0],
+        comp.rows[0] || {},
+        (withCrew[0].crew || []).map((c) => c.name || c.username)
+      );
+    } catch (e) {
+      console.warn('Gagal notifikasi:', e.message);
+    }
     res.status(201).json(withCrew[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: duplicateMessage(req.body?.type) });

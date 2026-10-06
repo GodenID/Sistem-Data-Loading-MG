@@ -79,7 +79,10 @@ export const processUpload = async (
       pic,
       type,
       photo_count: files.length,
-      catatan: catatan || null
+      catatan: catatan || null,
+      // Dikirim sekalian agar notifikasi Telegram langsung bawa nama tim.
+      // (Di bawah tetap dipanggil setHistoryCrew sebagai pengaman.)
+      crew: crewIds,
     };
 
     let savedHistory;

@@ -60,6 +60,21 @@ Coolify > New Resource > Application > pilih repo ini > ni:
 Test: `curl https://api-.../health` → `{"ok":true,"db":"up"}`
 Test data: `curl https://api-.../api/companies/count`
 
+## 3b. Notifikasi Telegram (opsional tapi disarankan)
+
+Tiap dokumentasi baru (loading/perawatan) otomatis kirim pesan ke grup Telegram.
+
+1. Chat ke **@BotFather** di Telegram → `/newbot` → isi nama → dapat **token** (`123456:ABC...`).
+2. Buat grup internal (mis. "Loading MG") → masukkan bot sebagai anggota.
+3. Cari tahu chat ID grup: chat ke **@getmyid_bot** → forward/buka dari grup, atau buka
+   `https://api.telegram.org/botTOKEN/getUpdates` setelah kirim 1 pesan di grup
+   (cari `"chat":{"id":-100xxx}`). ID grup diawali tanda minus.
+4. Di Coolify (service API) tambah env:
+   - `TELEGRAM_BOT_TOKEN=token-dari-botfather`
+   - `TELEGRAM_CHAT_ID=-100xxx`
+   - `FRONTEND_URL=https://domain-frontend-kamu` (untuk link di pesan)
+5. Redeploy → test upload 1 dokumentasi → pesan harus masuk grup.
+
 ## 4. Arahkan frontend ke API baru
 
 Set di Cloudflare Pages > Settings > Environment Variables:
