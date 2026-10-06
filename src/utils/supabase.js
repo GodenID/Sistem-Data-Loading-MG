@@ -158,6 +158,20 @@ export const setHistoryCrew = async (historyId, userIds) => {
   return apiPost(`/api/history/${historyId}/crew`, { userIds });
 };
 
+// ---------- Galeri ----------
+
+export const getGallery = async (filters = {}, { page = 1, limit = 60 } = {}) => {
+  return apiGet('/api/photos/gallery', {
+    companyId: filters.companyId,
+    type: filters.type,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+    crewUserId: filters.crewUserId,
+    page,
+    limit,
+  });
+};
+
 // ---------- Statistics ----------
 
 export const getStatistics = async () => {

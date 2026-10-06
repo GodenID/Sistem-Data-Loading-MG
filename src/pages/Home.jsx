@@ -405,14 +405,17 @@ const Home = () => {
             <p className="text-xs text-gray-500 mt-1">Dokumentasi</p>
           </div>
           
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+          <div
+            onClick={() => navigate('/galeri')}
+            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center cursor-pointer hover:shadow-md active:scale-[0.98] transition-all"
+          >
             <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center mx-auto mb-2">
               <Image className="w-5 h-5 text-orange-600" />
             </div>
             <div className="text-2xl font-bold text-gray-900">
               <AnimatedCounter end={stats.totalPhotos} duration={1500} />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Media</p>
+            <p className="text-xs text-gray-500 mt-1">Media • Lihat galeri</p>
           </div>
         </div>
 

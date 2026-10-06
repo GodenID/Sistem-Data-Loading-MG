@@ -233,6 +233,12 @@ const AdminDashboard = () => {
             description="Siapa loading berapa kali"
             onClick={() => navigate('/admin/team')}
           />
+          <MenuItem
+            icon={Image}
+            title="Galeri"
+            description="Semua foto & video"
+            onClick={() => navigate('/galeri')}
+          />
         </div>
 
         {/* Analytics Dashboard - Error Rate & Upload Stats */}

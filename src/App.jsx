@@ -16,6 +16,7 @@ import AdminClients from './pages/AdminClients';
 import AdminUsers from './pages/AdminUsers';
 import ChangePassword from './pages/ChangePassword';
 import TeamPage from './pages/TeamPage';
+import Gallery from './pages/Gallery';
 
 import PublicClientView from './pages/PublicClientView';
 import PublicShareView from './pages/PublicShareView';
@@ -38,6 +39,7 @@ function AnimatedRoutes() {
       {/* Utama: wajib login (portal klien di bawah tetap publik) */}
       <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
       <Route path="/client/:slug" element={<RequireAuth><ClientDetail /></RequireAuth>} />
+      <Route path="/galeri" element={<RequireAuth><Gallery /></RequireAuth>} />
       <Route path="/portal/:token" element={<PublicClientView />} />
       <Route path="/share/:token" element={<PublicShareView />} />
 
