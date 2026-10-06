@@ -255,12 +255,7 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                 )}
               </div>
               <p className="text-xs text-gray-500">
-                ID: #{loadingData.id}
-                {loadingData.code && (
-                  <span className="ml-2 inline-block px-2 py-0.5 rounded-md bg-gray-900 text-white text-[11px] font-mono font-semibold">
-                    {loadingData.code}
-                  </span>
-                )}
+                ID: {loadingData.code || `#${loadingData.id}`}
               </p>
             </div>
           </div>
