@@ -47,8 +47,9 @@ async function notifyNewUpload(history, company, crewNames = []) {
   const isRawat = history.type === 'perawatan';
   const lines = [
     `${isRawat ? '🧹' : '🌿'} ${isRawat ? 'Perawatan' : 'Loading'} baru — ${company?.name || 'Unknown'}`,
-    `📅 ${formatDateID(history.date)} • Oleh: ${history.pic || '-'}`,
   ];
+  if (history.code) lines.push(`🔖 ${history.code}`);
+  lines.push(`📅 ${formatDateID(history.date)} • Oleh: ${history.pic || '-'}`);
   if (crewNames.length) lines.push(`👥 Tim: ${crewNames.join(', ')}`);
   lines.push(`📷 ${history.photo_count || 0} media`);
   if (history.catatan) lines.push(`📝 ${String(history.catatan).slice(0, 200)}`);

@@ -75,6 +75,7 @@ export const getLoadingHistory = async (filters = {}, { page, limit } = {}) => {
     sortBy: filters.sortBy,
     sortDir: filters.sortDir,
     crewUserId: filters.crewUserId,
+    code: filters.code,
     page,
     limit,
   };
@@ -92,6 +93,7 @@ export const getLoadingHistorySummary = async (filters = {}) => {
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
     crewUserId: filters.crewUserId,
+    code: filters.code,
   });
 };
 

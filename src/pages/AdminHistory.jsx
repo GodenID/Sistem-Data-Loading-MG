@@ -90,6 +90,12 @@ const AdminHistory = () => {
     if (dateFrom) f.dateFrom = dateFrom;
     if (dateTo) f.dateTo = dateTo;
     if (searchQuery) {
+      // Kode unik (LOAD-2026-0001 / RWT-2026-0001) dicari langsung,
+      // tidak dicampur dengan pencarian nama/PIC.
+      if (/^(LOAD|RWT)-\d{4}-?\d*$/i.test(searchQuery.trim())) {
+        f.code = searchQuery.trim();
+        return f;
+      }
       if (selectedCompany === 'all') {
         const q = searchQuery.toLowerCase();
         const matched = companies
@@ -639,6 +645,7 @@ const AdminHistory = () => {
                           )}
                         </button>
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kode</th>
                       <th 
                         className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort('date')}
@@ -708,6 +715,11 @@ const AdminHistory = () => {
                                 <Square className="w-5 h-5 text-gray-400" />
                               )}
                             </button>
+                          </td>
+                          <td className="px-4 py-4 cursor-pointer" onClick={() => setSelectedLoading(item)}>
+                            <span className="inline-block px-2 py-1 rounded-lg bg-gray-900 text-white text-[11px] font-mono font-semibold whitespace-nowrap">
+                              {item.code || '-'}
+                            </span>
                           </td>
                           <td className="px-4 py-4 cursor-pointer" onClick={() => setSelectedLoading(item)}>
                             <div className="flex items-center gap-2">

@@ -73,6 +73,9 @@ const MemberRow = ({ m, rank, expanded, onToggle }) => {
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${h.type === 'perawatan' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                     {h.type === 'perawatan' ? 'RAWAT' : 'LOAD'}
                   </span>
+                  {h.code && (
+                    <span className="text-[10px] font-mono font-semibold text-gray-500 shrink-0">{h.code}</span>
+                  )}
                   <span className="flex-1 truncate text-gray-800">{h.companyName}</span>
                   <span className="text-xs text-gray-400 flex items-center gap-1 shrink-0">
                     <Calendar className="w-3 h-3" />{fmtDate(h.date)}

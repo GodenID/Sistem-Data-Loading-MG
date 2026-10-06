@@ -42,6 +42,13 @@ function buildHistoryWhere(q, values) {
     values.push(q.dateTo);
     conds.push(`lh.date <= $${values.length}`);
   }
+  if (q.code) {
+    const safe = String(q.code).replace(/[%(),]/g, ' ').trim().slice(0, 32);
+    if (safe) {
+      values.push(`%${safe}%`);
+      conds.push(`lh.code ILIKE $${values.length}`);
+    }
+  }
   if (q.crewUserId) {
     values.push(Number(q.crewUserId));
     conds.push(`EXISTS (SELECT 1 FROM history_crew hc WHERE hc.history_id = lh.id AND hc.user_id = $${values.length})`);
@@ -303,17 +310,40 @@ function duplicateMessage(type) {
     : 'Sudah ada data loading untuk perusahaan ini pada tanggal yang sama.';
 }
 
+// Kode unik: LOAD-2026-0001 / RWT-2026-0001 (nomor per tipe+tahun).
+// Counter di-lock per transaksi agar tidak dobel saat upload barengan.
+async function nextCode(client, type, dateStr) {
+  const year = new Date(dateStr).getFullYear() || new Date().getFullYear();
+  await client.query(
+    'INSERT INTO doc_counters (type, year, last_no) VALUES ($1, $2, 0) ON CONFLICT DO NOTHING',
+    [type, year]
+  );
+  const { rows } = await client.query(
+    'SELECT last_no FROM doc_counters WHERE type = $1 AND year = $2 FOR UPDATE',
+    [type, year]
+  );
+  const no = (rows[0]?.last_no || 0) + 1;
+  await client.query('UPDATE doc_counters SET last_no = $1 WHERE type = $2 AND year = $3', [no, type, year]);
+  const prefix = type === 'perawatan' ? 'RWT' : 'LOAD';
+  return `${prefix}-${year}-${String(no).padStart(4, '0')}`;
+}
+
 // POST /api/history
 router.post('/', async (req, res) => {
+  const client = await pool.connect();
   try {
     const { company_id, date, pic, type, photo_count = 0, catatan = null, crew = [] } = req.body;
     if (!company_id || !date || !pic || !type) {
       return res.status(400).json({ error: 'company_id, date, pic, type wajib' });
     }
-    const { rows } = await pool.query(
-      'INSERT INTO loading_history_reports (company_id, date, pic, type, photo_count, catatan) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [company_id, date, pic, type, photo_count, catatan]
+    await client.query('BEGIN');
+    const code = await nextCode(client, type, date);
+    const inserted = await client.query(
+      'INSERT INTO loading_history_reports (company_id, date, pic, type, photo_count, catatan, code) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [company_id, date, pic, type, photo_count, catatan, code]
     );
+    await client.query('COMMIT');
+    const rows = inserted.rows;
     if (Array.isArray(crew) && crew.length) {
       try {
         await replaceCrew(rows[0].id, crew);
@@ -335,9 +365,12 @@ router.post('/', async (req, res) => {
     }
     res.status(201).json(withCrew[0]);
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     if (e.code === '23505') return res.status(409).json({ error: duplicateMessage(req.body?.type) });
     console.error('POST /history:', e.message);
     res.status(500).json({ error: 'Gagal tambah history' });
+  } finally {
+    client.release();
   }
 });
 

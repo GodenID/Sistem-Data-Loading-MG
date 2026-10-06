@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS loading_history_reports (
     type VARCHAR(20) NOT NULL CHECK (type IN ('loading', 'perawatan')),
     photo_count INTEGER DEFAULT 0,
     catatan TEXT,
+    code VARCHAR(32) UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -160,6 +161,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+
+-- ---------- doc_counters (nomor urut kode dokumentasi per tipe+tahun) ----------
+CREATE TABLE IF NOT EXISTS doc_counters (
+    type VARCHAR(20) NOT NULL,
+    year INT NOT NULL,
+    last_no INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (type, year)
+);
 
 -- ---------- history_crew (tim per dokumentasi — user berakun) ----------
 CREATE TABLE IF NOT EXISTS history_crew (

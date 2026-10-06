@@ -254,7 +254,14 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">ID: #{loadingData.id}</p>
+              <p className="text-xs text-gray-500">
+                ID: #{loadingData.id}
+                {loadingData.code && (
+                  <span className="ml-2 inline-block px-2 py-0.5 rounded-md bg-gray-900 text-white text-[11px] font-mono font-semibold">
+                    {loadingData.code}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           <button
