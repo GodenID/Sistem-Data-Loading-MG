@@ -24,6 +24,7 @@ import { downloadPhotosAsZip } from '../utils/downloadZip';
 import { getPhotosByHistoryId, deletePhotoRecord, updateLoadingHistory, getHistoryCrew, setHistoryCrew } from '../utils/supabase';
 import { deleteFromS3 } from '../utils/s3Config';
 import { getMediaTypeFromUrl } from '../utils/media';
+import { toast } from '../utils/toast';
 import Lightbox from './Lightbox';
 import CrewPicker from './CrewPicker';
 
@@ -254,9 +255,26 @@ const LoadingDetailModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">
-                ID: {loadingData.code || `#${loadingData.id}`}
-              </p>
+              <div className="flex items-center gap-2">
+                {loadingData.code ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(loadingData.code);
+                        toast.success('Kode tersalin');
+                      } catch {
+                        /* abaikan */
+                      }
+                    }}
+                    title="Klik untuk salin kode"
+                    className="inline-block px-2 py-0.5 rounded-md bg-gray-900 text-white text-[11px] font-mono font-semibold hover:bg-gray-700 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {loadingData.code}
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-500">ID: #{loadingData.id}</span>
+                )}
+              </div>
             </div>
           </div>
           <button
