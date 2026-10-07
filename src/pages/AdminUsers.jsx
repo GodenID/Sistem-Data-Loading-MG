@@ -316,6 +316,12 @@ const AdminUsers = () => {
                     <p className="text-xs text-gray-500">
                       @{u.username} • {u.role}
                       {!u.is_active && <span className="text-red-500"> • nonaktif</span>}
+                      {u.must_change_password && <span className="text-amber-600"> • belum ganti password</span>}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Login terakhir: {u.last_login_at
+                        ? new Date(u.last_login_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : 'belum pernah'}
                     </p>
                   </div>
                 </div>

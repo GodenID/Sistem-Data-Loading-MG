@@ -7,7 +7,7 @@ const { requireAuth, requireAdmin } = require('../auth');
 const router = express.Router();
 
 const SESSION_DAYS = 30;
-const PUBLIC_USER = 'SELECT id, username, name, role, is_active, must_change_password, created_at FROM users';
+const PUBLIC_USER = 'SELECT id, username, name, role, is_active, must_change_password, last_login_at, created_at FROM users';
 
 // Username dinormalisasi: kecil semua, tanpa spasi/karakter aneh.
 // Mencegah kasus "tidak bisa login" karena typo tak terlihat / kapital.
@@ -50,6 +50,7 @@ router.post('/auth/login', async (req, res) => {
       token,
       expires,
     ]);
+    await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
     res.json({
       token,
@@ -166,7 +167,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       'INSERT INTO users (username, password_hash, name, role, must_change_password) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, name, role, is_active, created_at',
       [clean, hash, name || clean, role]
     );
-    res.status(201).json(r.rows[0]);
+    res.status(201).json({ ...r.rows[0], last_login_at: null });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Username sudah dipakai' });
     res.status(500).json({ error: 'Gagal tambah user' });
