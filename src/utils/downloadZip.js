@@ -1,6 +1,17 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { getMediaExtension, getMediaTypeFromUrl } from './media';
+import { API_BASE } from './api';
+
+// Download via backend (bypass CORS bucket S3). Gagal -> lempar agar
+// pemanggil bisa coba metode langsung.
+const downloadViaProxy = async (url, filename) => {
+  if (!API_BASE) throw new Error('API belum dikonfigurasi');
+  const proxy = `${API_BASE}/api/media/download?src=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || 'file')}`;
+  const response = await fetch(proxy, { method: 'GET' });
+  if (!response.ok) throw new Error('Proxy gagal');
+  return response.blob();
+};
 
 /**
  * Download media using image fallback for CORS-sensitive images.
@@ -74,54 +85,56 @@ export const downloadPhotosAsZip = async (photos, companyName, date, pic) => {
     try {
       let blob;
       const mediaType = getMediaTypeFromUrl(photoUrl);
-      
-      // Try multiple methods to download the image
-      try {
-        // Method 1: Try fetch first
-        const response = await fetch(photoUrl, {
-          method: 'GET',
-          mode: 'cors',
-          cache: 'no-cache',
-        });
-        
-        if (response.ok) {
-          blob = await response.blob();
-        } else {
-          throw new Error('Fetch failed');
-        }
-      } catch (fetchError) {
-        if (mediaType === 'video') {
-          throw fetchError;
-        }
 
-        // Method 2: Try using XMLHttpRequest for better CORS handling
+      // Determine extension from blob type or URL
+      const extension = getMediaExtension(photoUrl, '');
+      const fileName = `${String(index + 1).padStart(3, '0')}.${extension}`;
+
+      // Method 0 (utama): via backend proxy — bebas CORS
+      try {
+        blob = await downloadViaProxy(photoUrl, fileName);
+      } catch (proxyError) {
+        // Method 1: fetch langsung
         try {
-          blob = await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', photoUrl, true);
-            xhr.responseType = 'blob';
-            xhr.onload = () => {
-              if (xhr.status === 200) {
-                resolve(xhr.response);
-              } else {
-                reject(new Error('XHR failed'));
-              }
-            };
-            xhr.onerror = () => reject(new Error('XHR error'));
-            xhr.send();
+          const response = await fetch(photoUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
           });
-        } catch (xhrError) {
-          // Method 3: Try image canvas approach
-          blob = await downloadImage(photoUrl);
+
+          if (response.ok) {
+            blob = await response.blob();
+          } else {
+            throw new Error('Fetch failed');
+          }
+        } catch (fetchError) {
+          if (mediaType === 'video') {
+            throw fetchError;
+          }
+
+          // Method 2: XMLHttpRequest
+          try {
+            blob = await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('GET', photoUrl, true);
+              xhr.responseType = 'blob';
+              xhr.onload = () => {
+                if (xhr.status === 200) {
+                  resolve(xhr.response);
+                } else {
+                  reject(new Error('XHR failed'));
+                }
+              };
+              xhr.onerror = () => reject(new Error('XHR error'));
+              xhr.send();
+            });
+          } catch (xhrError) {
+            // Method 3: canvas (gambar saja)
+            blob = await downloadImage(photoUrl);
+          }
         }
       }
-      
-      // Determine extension from blob type or URL
-      const extension = getMediaExtension(photoUrl, blob.type);
-      
-      // Nama file: 001.jpg, 002.mp4, dst
-      const fileName = `${String(index + 1).padStart(3, '0')}.${extension}`;
-      
+
       // Tambahkan ke folder
       folder.file(fileName, blob);
       
@@ -170,19 +183,28 @@ export const downloadPhotosAsZip = async (photos, companyName, date, pic) => {
  */
 export const downloadSinglePhoto = async (photoUrl, fileName = 'foto.jpg') => {
   try {
-    // Try fetch first
+    // Utama: via backend proxy (bebas CORS)
+    try {
+      const blob = await downloadViaProxy(photoUrl, fileName);
+      saveAs(blob, fileName);
+      return { success: true };
+    } catch {
+      /* lanjut ke metode langsung */
+    }
+
+    // Fallback: fetch langsung
     const response = await fetch(photoUrl, {
       method: 'GET',
       mode: 'cors',
     });
-    
+
     if (response.ok) {
       const blob = await response.blob();
       saveAs(blob, fileName);
       return { success: true };
     }
-    
-    // Fallback to XHR
+
+    // Fallback terakhir: XHR
     const blob = await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', photoUrl, true);
@@ -197,7 +219,7 @@ export const downloadSinglePhoto = async (photoUrl, fileName = 'foto.jpg') => {
       xhr.onerror = () => reject(new Error('Failed'));
       xhr.send();
     });
-    
+
     saveAs(blob, fileName);
     return { success: true };
   } catch (error) {

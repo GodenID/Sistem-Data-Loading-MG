@@ -10,6 +10,7 @@ const shareRouter = require('./routes/shareLinks');
 const statsRouter = require('./routes/stats');
 const authRouter = require('./routes/auth');
 const teamRouter = require('./routes/team');
+const mediaRouter = require('./routes/media');
 const { attachUser } = require('./auth');
 
 const app = express();
@@ -63,6 +64,7 @@ app.use('/api', shareRouter);
 app.use('/api/upload-stats', statsRouter);
 app.use('/api', authRouter);
 app.use('/api/team', teamRouter);
+app.use('/api/media', mediaRouter);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
