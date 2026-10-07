@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Images, Search, X, Loader2, Video, ExternalLink,
+  ArrowLeft, Images, Search, X, Loader2, Video, RefreshCw,
 } from 'lucide-react';
 import { getGallery, getCompanies, getTeam } from '../utils/supabase';
 import { getMediaTypeFromUrl } from '../utils/media';
@@ -22,6 +22,7 @@ const Gallery = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [team, setTeam] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -57,6 +58,19 @@ const Gallery = () => {
     loadPage(1, false).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.companyId, filters.type, filters.crewUserId, filters.dateFrom, filters.dateTo]);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    setPage(1);
+    loadPage(1, false).finally(() => setRefreshing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadPage]);
+
+  // Upload background selesai (dock bawah) -> muat ulang otomatis
+  useEffect(() => {
+    window.addEventListener('mg-upload-done', refresh);
+    return () => window.removeEventListener('mg-upload-done', refresh);
+  }, [refresh]);
 
   useEffect(() => {
     getCompanies().then(setCompanies).catch(() => {});
@@ -113,6 +127,13 @@ const Gallery = () => {
               </h1>
               <p className="text-xs text-gray-500">{total.toLocaleString('id-ID')} media</p>
             </div>
+            <button
+              onClick={refresh}
+              title="Muat ulang"
+              className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 shrink-0"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium shrink-0 ${
