@@ -9,13 +9,27 @@ const router = express.Router();
 const SESSION_DAYS = 30;
 const PUBLIC_USER = 'SELECT id, username, name, role, is_active, must_change_password, created_at FROM users';
 
+// Username dinormalisasi: kecil semua, tanpa spasi/karakter aneh.
+// Mencegah kasus "tidak bisa login" karena typo tak terlihat / kapital.
+function normalizeUsername(raw) {
+  return String(raw || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200F\u2060\uFEFF]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function validUsername(u) {
+  return /^[a-z0-9._-]{3,32}$/.test(u);
+}
+
 // POST /api/auth/login { username, password }
 router.post('/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Username & password wajib' });
 
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1 LIMIT 1', [
+    const { rows } = await pool.query('SELECT * FROM users WHERE lower(username) = lower($1) LIMIT 1', [
       String(username).trim(),
     ]);
     const user = rows[0];
@@ -120,13 +134,14 @@ router.post('/users/bootstrap', async (req, res) => {
     const { rows } = await pool.query('SELECT COUNT(*)::int AS c FROM users');
     if (rows[0].c > 0) return res.status(403).json({ error: 'Bootstrap sudah dipakai' });
     const { username, password, name } = req.body || {};
-    if (!username || !password || String(password).length < 6) {
-      return res.status(400).json({ error: 'Username & password (min 6) wajib' });
+    const clean = normalizeUsername(username);
+    if (!validUsername(clean) || !password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Username (huruf kecil, min 3) & password (min 6) wajib' });
     }
     const hash = await bcrypt.hash(String(password), 10);
     const r = await pool.query(
       'INSERT INTO users (username, password_hash, name, role, must_change_password) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, name, role',
-      [String(username).trim(), hash, name || String(username).trim(), 'admin']
+      [clean, hash, name || clean, 'admin']
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -139,14 +154,17 @@ router.post('/users/bootstrap', async (req, res) => {
 router.post('/users', requireAdmin, async (req, res) => {
   try {
     const { username, password, name, role = 'staff' } = req.body || {};
-    if (!username || !password || String(password).length < 6) {
-      return res.status(400).json({ error: 'Username & password (min 6) wajib' });
+    const clean = normalizeUsername(username);
+    if (!validUsername(clean) || !password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Username (huruf kecil, min 3) & password (min 6) wajib' });
     }
     if (!['admin', 'staff'].includes(role)) return res.status(400).json({ error: 'Role harus admin/staff' });
+    const dup = await pool.query('SELECT 1 FROM users WHERE lower(username) = $1 LIMIT 1', [clean]);
+    if (dup.rows.length) return res.status(409).json({ error: 'Username sudah dipakai' });
     const hash = await bcrypt.hash(String(password), 10);
     const r = await pool.query(
       'INSERT INTO users (username, password_hash, name, role, must_change_password) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, name, role, is_active, created_at',
-      [String(username).trim(), hash, name || String(username).trim(), role]
+      [clean, hash, name || clean, role]
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
