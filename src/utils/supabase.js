@@ -102,6 +102,12 @@ export const checkLoadingDuplicate = async (companyId, date, type, excludeId = n
   return !!res.duplicate;
 };
 
+// Kembalikan record yang bentrok (untuk modal blokir duplikat), atau null.
+export const findLoadingDuplicate = async (companyId, date, type, excludeId = null) => {
+  const res = await apiGet('/api/history/check-duplicate', { companyId, date, type, excludeId });
+  return res.duplicate ? res.record || null : null;
+};
+
 export const addLoadingHistory = async (history) => {
   return apiPost('/api/history', history);
 };

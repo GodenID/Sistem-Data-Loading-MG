@@ -6,12 +6,13 @@ import {
   FileText, Sparkles
 } from 'lucide-react';
 import { getTodayDate, formatDate } from '../utils/date';
-import { checkLoadingDuplicate } from '../utils/supabase';
+import { findLoadingDuplicate } from '../utils/supabase';
 import { compressMultipleImages, calculateSavings } from '../utils/imageCompression';
 import { createMediaItemsFromFiles, formatDuration } from '../utils/media';
 import { useUploadQueue } from '../context/UploadQueueContext';
 import { useAuth } from '../context/AuthContext';
 import CrewPicker from './CrewPicker';
+import DuplicateBlockedModal from './DuplicateBlockedModal';
 
 const CONFIG = {
   loading: {
@@ -79,6 +80,8 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   const [photos, setPhotos] = useState([]);
   const [catatan, setCatatan] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateRecord, setDuplicateRecord] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -169,26 +172,30 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   const handleSubmit = async () => {
     if (!date || !pic || photos.length === 0 || !companyId || !user) return;
 
-    // Cek cepat dari memori (data yang sudah dimuat di halaman)
+    // BLOKIR MUTLAK: cek cepat dari memori dulu, lalu otoritatif ke DB.
+    // Tidak ada lagi tombol "tetap tambah" — duplikat = stop.
     if (checkDuplicate) {
-      const isDuplicate = await checkDuplicate(date, cfg.duplicateType);
-      if (isDuplicate) {
-        const confirmed = window.confirm(
-          `${cfg.duplicateMsg}\n\nApakah Anda yakin ingin menambahkan data lagi?`
-        );
-        if (!confirmed) return;
+      try {
+        const isDuplicate = await checkDuplicate(date, cfg.duplicateType);
+        if (isDuplicate) {
+          const rec = await findLoadingDuplicate(companyId, date, cfg.duplicateType).catch(() => null);
+          setDuplicateRecord(rec);
+          setShowDuplicateModal(true);
+          return;
+        }
+      } catch {
+        /* lanjut ke cek DB */
       }
     }
 
     // Cek otoritatif ke DB SEBELUM upload — cegah file orphan di S3
     // dan race-condition antar perangkat.
     try {
-      const existsInDb = await checkLoadingDuplicate(companyId, date, cfg.duplicateType);
-      if (existsInDb) {
-        const confirmed = window.confirm(
-          `${cfg.duplicateMsg}\n\nData sudah tercatat di database. Tetap tambah lagi?`
-        );
-        if (!confirmed) return;
+      const clash = await findLoadingDuplicate(companyId, date, cfg.duplicateType);
+      if (clash) {
+        setDuplicateRecord(clash);
+        setShowDuplicateModal(true);
+        return;
       }
     } catch (e) {
       // Gagal cek DB bukan alasan blokir — constraint UNIQUE di DB
@@ -464,6 +471,13 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
           </button>
         </div>
       </div>
+
+      <DuplicateBlockedModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        record={duplicateRecord}
+        type={type}
+      />
     </div>
   );
 };

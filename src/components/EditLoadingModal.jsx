@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/date';
 import { uploadMultipleToS3, deleteFromS3 } from '../utils/s3Config';
-import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, checkLoadingDuplicate, getHistoryCrew, setHistoryCrew } from '../utils/supabase';
+import { updateLoadingHistory, updatePhotos, getPhotosByHistoryId, getHistoryCrew, setHistoryCrew, findLoadingDuplicate } from '../utils/supabase';
 import { createMediaItemsFromFiles, formatDuration, getMediaTypeFromUrl, getMediaUploadSuccessMessage } from '../utils/media';
 import { useAuth } from '../context/AuthContext';
 import CrewPicker from './CrewPicker';
+import DuplicateBlockedModal from './DuplicateBlockedModal';
 
 const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const { user } = useAuth();
@@ -35,6 +36,8 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [duplicateRecord, setDuplicateRecord] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -123,20 +126,16 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
   const handleSubmit = async () => {
     if (!date || !pic) return;
 
-    // Jika tanggal diubah, pastikan tidak menabrak data lain (UNIQUE company,date,type)
+    // Jika tanggal diubah, pastikan tidak menabrak data lain (UNIQUE company,date,type).
+    // BLOKIR MUTLAK — tidak ada opsi "tetap lanjut".
     if (date !== loadingData.date) {
       try {
-        const clash = await checkLoadingDuplicate(
+        const clash = await findLoadingDuplicate(
           loadingData.company_id, date, loadingData.type, loadingData.id
         );
         if (clash) {
-          setUploadStatus('error');
-          setErrorMessage(
-            loadingData.type === 'perawatan'
-              ? 'Sudah ada data perawatan untuk perusahaan ini pada tanggal tersebut.'
-              : 'Sudah ada data loading untuk perusahaan ini pada tanggal tersebut.'
-          );
-          setIsSubmitting(false);
+          setDuplicateRecord(clash);
+          setShowDuplicateModal(true);
           return;
         }
       } catch (e) {
@@ -548,6 +547,13 @@ const EditLoadingModal = ({ isOpen, onClose, loadingData, onSuccess }) => {
           </button>
         </div>
       </div>
+
+      <DuplicateBlockedModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        record={duplicateRecord}
+        type={loadingData?.type}
+      />
     </div>
   );
 };

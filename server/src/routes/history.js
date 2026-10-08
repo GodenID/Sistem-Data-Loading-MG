@@ -227,18 +227,43 @@ router.get('/stats', async (_req, res) => {
 });
 
 // GET /api/history/check-duplicate?companyId=&date=&type=&excludeId=
+// Mutlak: frontend memblokir submit jika duplicate=true (DB constraint UNIQUE
+// sebagai pengaman terakhir). record dikembalikan untuk ditampilkan di modal.
 router.get('/check-duplicate', async (req, res) => {
   try {
     const { companyId, date, type, excludeId } = req.query;
     if (!companyId || !date || !type) return res.status(400).json({ error: 'companyId, date, type wajib' });
     const values = [Number(companyId), date, type];
-    let sql = 'SELECT COUNT(*)::int AS c FROM loading_history_reports WHERE company_id = $1 AND date = $2 AND type = $3';
+    let extra = '';
     if (excludeId) {
       values.push(Number(excludeId));
-      sql += ` AND id <> $${values.length}`;
+      extra = ` AND lh.id <> $${values.length}`;
     }
-    const { rows } = await pool.query(sql, values);
-    res.json({ duplicate: rows[0].c > 0 });
+    const countR = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM loading_history_reports lh
+       WHERE lh.company_id = $1 AND lh.date = $2 AND lh.type = $3${extra}`,
+      values
+    );
+    let record = null;
+    if (countR.rows[0].c > 0) {
+      const rec = await pool.query(
+        `SELECT lh.id, lh.company_id, lh.date, lh.pic, lh.type, lh.photo_count, lh.code, lh.created_at,
+          c.name AS company_name
+         FROM loading_history_reports lh LEFT JOIN companies_reports c ON c.id = lh.company_id
+         WHERE lh.company_id = $1 AND lh.date = $2 AND lh.type = $3${extra}
+         ORDER BY lh.id ASC LIMIT 1`,
+        values
+      );
+      if (rec.rows.length) {
+        const r = rec.rows[0];
+        record = {
+          id: r.id, company_id: r.company_id, date: r.date, pic: r.pic,
+          type: r.type, photo_count: r.photo_count, code: r.code,
+          created_at: r.created_at, companyName: r.company_name || 'Unknown',
+        };
+      }
+    }
+    res.json({ duplicate: countR.rows[0].c > 0, record });
   } catch (e) {
     res.status(500).json({ error: 'Gagal cek duplikat' });
   }
