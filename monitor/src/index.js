@@ -118,7 +118,14 @@ async function checkOne(env, target) {
 }
 
 async function runChecks(env) {
-  return Promise.all(targets(env).map((t) => checkOne(env, t)));
+  const results = await Promise.all(targets(env).map((t) => checkOne(env, t)));
+  // Heartbeat tiap ~10 menit (bukan tiap menit, hemat kuota tulis KV) supaya
+  // /status membuktikan monitor sendiri masih jalan.
+  const hb = await env.STATE.get('heartbeat', 'json');
+  if (!hb || Date.now() - hb.at >= 10 * 60 * 1000) {
+    await env.STATE.put('heartbeat', JSON.stringify({ at: Date.now(), results }));
+  }
+  return results;
 }
 
 export default {
@@ -132,6 +139,7 @@ export default {
     if (url.pathname !== '/status') return new Response('mg-uptime-monitor', { status: 200 });
     const out = {};
     for (const t of targets(env)) out[t.key] = (await env.STATE.get(t.key, 'json')) || { status: 'unknown' };
+    out.heartbeat = (await env.STATE.get('heartbeat', 'json')) || null;
     return Response.json(out, { headers: { 'cache-control': 'no-store' } });
   },
 };
