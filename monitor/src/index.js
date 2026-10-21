@@ -130,7 +130,14 @@ async function runChecks(env) {
 
 export default {
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(runChecks(env));
+    ctx.waitUntil(
+      runChecks(env).catch(async (e) => {
+        console.error('monitor error:', e?.stack || e);
+        try {
+          await env.STATE.put('lasterror', JSON.stringify({ at: Date.now(), message: String(e?.message || e) }));
+        } catch { /* abaikan */ }
+      })
+    );
   },
 
   // GET /status -> keadaan terakhir (tanpa memicu alert). Tidak berisi rahasia.
@@ -140,6 +147,8 @@ export default {
     const out = {};
     for (const t of targets(env)) out[t.key] = (await env.STATE.get(t.key, 'json')) || { status: 'unknown' };
     out.heartbeat = (await env.STATE.get('heartbeat', 'json')) || null;
+    const lasterror = await env.STATE.get('lasterror', 'json');
+    if (lasterror) out.lasterror = lasterror;
     return Response.json(out, { headers: { 'cache-control': 'no-store' } });
   },
 };
