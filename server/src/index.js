@@ -12,7 +12,7 @@ const authRouter = require('./routes/auth');
 const teamRouter = require('./routes/team');
 const mediaRouter = require('./routes/media');
 const { attachUser } = require('./auth');
-const { ensureUniqueLoading } = require('./ensureSchema');
+const { ensureUniqueLoading, dedupeLoading } = require('./ensureSchema');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,7 +76,8 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`MG Report API jalan di port ${PORT}`);
+  await dedupeLoading(process.env.DEDUPE_MODE);
   ensureUniqueLoading();
 });

@@ -11,6 +11,7 @@ services:
       PORT: ${PORT:-3001}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL belum di-set di Environment Variables Coolify}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      DEDUPE_MODE: ${DEDUPE_MODE:-}
     expose:
       - "3001"
     restart: unless-stopped
