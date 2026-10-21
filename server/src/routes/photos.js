@@ -61,26 +61,64 @@ router.get('/gallery', requireAuth, async (req, res) => {
 });
 
 // POST /api/photos (single atau bulk via array)
+// Idempotent: pasangan (history_id, url) yang sudah ada dilewati, jadi kalau
+// klien kirim ulang karena jaringan lemot, foto tidak jadi dobel.
 router.post('/', async (req, res) => {
+  const client = await pool.connect();
   try {
     const body = Array.isArray(req.body) ? req.body : [req.body];
     if (!body.length || !body[0].history_id || !body[0].url || !body[0].filename) {
       return res.status(400).json({ error: 'history_id, url, filename wajib' });
     }
-    const vals = [];
-    const ph = body.map((p, i) => {
-      vals.push(p.history_id, p.url, p.filename, p.size_bytes || null, p.sort_order ?? i + 1);
-      const b = i * 5;
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`;
-    });
-    const { rows } = await pool.query(
-      `INSERT INTO photos_reports (history_id, url, filename, size_bytes, sort_order) VALUES ${ph.join(', ')} RETURNING *`,
-      vals
+    const historyIds = [...new Set(body.map((p) => Number(p.history_id)).filter(Boolean))].sort((a, b) => a - b);
+    const urls = body.map((p) => p.url);
+
+    await client.query('BEGIN');
+    for (const hid of historyIds) {
+      await client.query('SELECT pg_advisory_xact_lock($1)', [hid]);
+    }
+    const existing = await client.query(
+      'SELECT history_id, url FROM photos_reports WHERE history_id = ANY($1) AND url = ANY($2)',
+      [historyIds, urls]
     );
+    const seen = new Set(existing.rows.map((r) => `${r.history_id}|${r.url}`));
+    const fresh = [];
+    body.forEach((p, i) => {
+      const key = `${p.history_id}|${p.url}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      fresh.push({ ...p, _order: p.sort_order ?? i + 1 });
+    });
+
+    let rows;
+    if (fresh.length) {
+      const vals = [];
+      const ph = fresh.map((p, i) => {
+        vals.push(p.history_id, p.url, p.filename, p.size_bytes || null, p._order);
+        const b = i * 5;
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`;
+      });
+      const ins = await client.query(
+        `INSERT INTO photos_reports (history_id, url, filename, size_bytes, sort_order) VALUES ${ph.join(', ')} RETURNING *`,
+        vals
+      );
+      rows = ins.rows;
+    } else {
+      // Semua sudah tersimpan (request ulang) -> kembalikan yang sudah ada
+      const cur = await client.query(
+        'SELECT * FROM photos_reports WHERE history_id = ANY($1) AND url = ANY($2) ORDER BY sort_order ASC',
+        [historyIds, urls]
+      );
+      rows = cur.rows;
+    }
+    await client.query('COMMIT');
     res.status(201).json(Array.isArray(req.body) ? rows : rows[0]);
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('POST /photos:', e.message);
     res.status(500).json({ error: 'Gagal tambah photo' });
+  } finally {
+    client.release();
   }
 });
 

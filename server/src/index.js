@@ -12,6 +12,7 @@ const authRouter = require('./routes/auth');
 const teamRouter = require('./routes/team');
 const mediaRouter = require('./routes/media');
 const { attachUser } = require('./auth');
+const { ensureUniqueLoading } = require('./ensureSchema');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -77,4 +78,5 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`MG Report API jalan di port ${PORT}`);
+  ensureUniqueLoading();
 });

@@ -84,9 +84,11 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
+      submitLockRef.current = false;
       setDate(getTodayDate());
       // Otomatis isi nama yang login (tetap bisa diubah manual)
       setPic(user?.name || '');
@@ -172,43 +174,50 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
   const handleSubmit = async () => {
     if (!date || !pic || photos.length === 0 || !companyId || !user) return;
 
-    // BLOKIR MUTLAK: cek cepat dari memori dulu, lalu otoritatif ke DB.
-    // Tidak ada lagi tombol "tetap tambah" — duplikat = stop.
-    if (checkDuplicate) {
+    // KUNCI SINKRON: pengecekan duplikat di bawah butuh 1-2 request jaringan.
+    // Di koneksi lemot user bisa tap berkali-kali sebelum state `isSubmitting`
+    // sempat render -> tiap tap masuk antrean. Ref ini langsung menolak tap berikutnya.
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
+    let enqueued = false;
+    try {
+      // BLOKIR MUTLAK: cek cepat dari memori dulu, lalu otoritatif ke DB.
+      // Tidak ada lagi tombol "tetap tambah" — duplikat = stop.
+      if (checkDuplicate) {
+        try {
+          const isDuplicate = await checkDuplicate(date, cfg.duplicateType);
+          if (isDuplicate) {
+            const rec = await findLoadingDuplicate(companyId, date, cfg.duplicateType).catch(() => null);
+            setDuplicateRecord(rec);
+            setShowDuplicateModal(true);
+            return;
+          }
+        } catch {
+          /* lanjut ke cek DB */
+        }
+      }
+
+      // Cek otoritatif ke DB SEBELUM upload — cegah file orphan di S3
+      // dan race-condition antar perangkat.
       try {
-        const isDuplicate = await checkDuplicate(date, cfg.duplicateType);
-        if (isDuplicate) {
-          const rec = await findLoadingDuplicate(companyId, date, cfg.duplicateType).catch(() => null);
-          setDuplicateRecord(rec);
+        const clash = await findLoadingDuplicate(companyId, date, cfg.duplicateType);
+        if (clash) {
+          setDuplicateRecord(clash);
           setShowDuplicateModal(true);
           return;
         }
-      } catch {
-        /* lanjut ke cek DB */
+      } catch (e) {
+        // Gagal cek DB bukan alasan blokir — server (lock + constraint UNIQUE)
+        // tetap jadi pengaman saat insert.
+        console.warn('Gagal cek duplikat ke DB:', e?.message);
       }
-    }
 
-    // Cek otoritatif ke DB SEBELUM upload — cegah file orphan di S3
-    // dan race-condition antar perangkat.
-    try {
-      const clash = await findLoadingDuplicate(companyId, date, cfg.duplicateType);
-      if (clash) {
-        setDuplicateRecord(clash);
-        setShowDuplicateModal(true);
-        return;
-      }
-    } catch (e) {
-      // Gagal cek DB bukan alasan blokir — constraint UNIQUE di DB
-      // tetap jadi pengaman terakhir saat insert.
-      console.warn('Gagal cek duplikat ke DB:', e?.message);
-    }
-
-    // Masuk antrean upload background -> modal langsung tutup, user bisa lanjut kerja.
-    // Progres + retry tampil di dock kiri bawah; halaman refresh via event mg-upload-done.
-    // (Pipeline blocking lama dipindah ke utils/processUpload.js)
-    setIsSubmitting(true);
-    try {
-      enqueueUpload({
+      // Masuk antrean upload background -> modal langsung tutup, user bisa lanjut kerja.
+      // Progres + retry tampil di dock kiri bawah; halaman refresh via event mg-upload-done.
+      // (Pipeline blocking lama dipindah ke utils/processUpload.js)
+      const jobId = enqueueUpload({
         files: photos,
         companyName,
         companyId,
@@ -218,10 +227,15 @@ const DocumentationModal = ({ isOpen, onClose, companyName, companyId, checkDupl
         type,
         catatan: catatan.trim() || null,
       });
+      if (jobId === null) return; // ditolak: sudah ada di antrean
+      enqueued = true;
       toast.info('Mengupload di background — bisa lanjut kerja lain');
       onClose();
     } finally {
       setIsSubmitting(false);
+      // Setelah masuk antrean, kunci tetap menyala sampai modal ditutup/dibuka lagi
+      // (dilepas di effect isOpen). Jika gagal/ditolak, lepas supaya bisa coba lagi.
+      if (!enqueued) submitLockRef.current = false;
     }
   };
 

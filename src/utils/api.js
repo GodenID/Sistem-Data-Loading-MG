@@ -31,7 +31,9 @@ async function request(path, { method = 'GET', body, query } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
-    throw new Error(`Tidak bisa hubungi API (${method} ${path}): ${e.message}`);
+    const err = new Error(`Tidak bisa hubungi API (${method} ${path}): ${e.message}`);
+    err.network = true; // tidak ada respons -> server mungkin sudah memproses
+    throw err;
   }
   let data = null;
   try {
@@ -40,7 +42,9 @@ async function request(path, { method = 'GET', body, query } = {}) {
     data = null;
   }
   if (!res.ok) {
-    throw new Error(data?.error || `API error ${res.status} (${method} ${path})`);
+    const err = new Error(data?.error || `API error ${res.status} (${method} ${path})`);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

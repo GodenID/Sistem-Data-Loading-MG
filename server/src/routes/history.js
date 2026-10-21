@@ -362,6 +362,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'company_id, date, pic, type wajib' });
     }
     await client.query('BEGIN');
+    // Serialisasi request kembar (double-tap / retry saat jaringan lemot) untuk
+    // kombinasi perusahaan+tanggal+tipe yang sama. Lock otomatis lepas saat
+    // COMMIT/ROLLBACK. Cek ini jalan walau constraint UNIQUE belum ada di DB.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${company_id}|${date}|${type}`]);
+    const existing = await client.query(
+      'SELECT 1 FROM loading_history_reports WHERE company_id = $1 AND date = $2 AND type = $3 LIMIT 1',
+      [company_id, date, type]
+    );
+    if (existing.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: duplicateMessage(type), duplicate: true });
+    }
     const code = await nextCode(client, type, date);
     const inserted = await client.query(
       'INSERT INTO loading_history_reports (company_id, date, pic, type, photo_count, catatan, code) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
@@ -377,18 +389,21 @@ router.post('/', async (req, res) => {
       }
     }
     const withCrew = await attachCrew([mapRow(rows[0])]);
-    // Notifikasi Telegram (gagal kirim tidak menggagalkan insert)
-    try {
-      const comp = await pool.query('SELECT name, slug FROM companies_reports WHERE id = $1', [company_id]);
-      await notifyNewUpload(
-        rows[0],
-        comp.rows[0] || {},
-        (withCrew[0].crew || []).map((c) => c.name || c.username)
-      );
-    } catch (e) {
-      console.warn('Gagal notifikasi:', e.message);
-    }
+    // Respon langsung — notifikasi Telegram jalan di belakang supaya response
+    // tidak lambat (response lambat memicu klien timeout lalu kirim ulang).
     res.status(201).json(withCrew[0]);
+    (async () => {
+      try {
+        const comp = await pool.query('SELECT name, slug FROM companies_reports WHERE id = $1', [company_id]);
+        await notifyNewUpload(
+          rows[0],
+          comp.rows[0] || {},
+          (withCrew[0].crew || []).map((c) => c.name || c.username)
+        );
+      } catch (e) {
+        console.warn('Gagal notifikasi:', e.message);
+      }
+    })();
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     if (e.code === '23505') return res.status(409).json({ error: duplicateMessage(req.body?.type) });

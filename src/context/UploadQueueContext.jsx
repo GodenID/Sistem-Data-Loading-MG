@@ -40,7 +40,8 @@ export const UploadQueueProvider = ({ children }) => {
     try {
       await processUpload(
         job.payload,
-        (status, progress) => updateJob(job.id, { status, progress })
+        (status, progress) => updateJob(job.id, { status, progress }),
+        job.resume // state yang bertahan antar retry (foto sudah ke S3, history sudah dibuat)
       );
       revokePreviews(job.payload.files);
       updateJob(job.id, { status: 'success', progress: 100 });
@@ -76,17 +77,27 @@ export const UploadQueueProvider = ({ children }) => {
   };
 
   const enqueueUpload = (payload) => {
+    // Anti dobel: satu perusahaan+tanggal+tipe hanya boleh punya 1 job di antrean
+    // (termasuk yang error/menunggu retry). Menangkap double-tap & submit ulang.
+    const key = `${payload.companyId}|${payload.date}|${payload.type}`;
+    if (jobsRef.current.some(j => j.key === key)) {
+      toast.error('Dokumentasi ini sudah ada di antrean upload. Cek dock di kiri bawah.');
+      return null;
+    }
     const id = ++jobSeq;
     const label = `${payload.companyName} • ${payload.type === 'perawatan' ? 'Perawatan' : 'Loading'}`;
     setJobsBoth(prev => [
       ...prev,
-      { id, payload, label, status: 'queued', progress: 0, error: null }
+      { id, key, payload, label, resume: {}, status: 'queued', progress: 0, error: null }
     ]);
     pump();
     return id;
   };
 
   const retryJob = (id) => {
+    // Hanya job yang error yang boleh di-retry; cegah double-tap saat sedang jalan.
+    const job = jobsRef.current.find(j => j.id === id);
+    if (!job || job.status !== 'error') return;
     setJobsBoth(prev => prev.map(j =>
       j.id === id ? { ...j, status: 'queued', progress: 0, error: null } : j
     ));

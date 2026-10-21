@@ -5,13 +5,21 @@
 -- constraint ini pengaman terakhir anti race-condition.
 -- ============================================
 
--- Bersihkan duplikat yang sudah terlanjur ada (sisakan id terkecil)
-DELETE FROM loading_history_reports a
-USING loading_history_reports b
-WHERE a.id > b.id
-  AND a.company_id = b.company_id
-  AND a.date = b.date
-  AND a.type = b.type;
+-- Bersihkan duplikat yang sudah terlanjur ada.
+-- Yang dipertahankan: baris dengan foto terbanyak (lalu id terkecil), supaya
+-- baris kosong hasil double-submit yang dihapus, bukan baris yang berisi foto.
+-- (Foto/share link/tim baris yang dihapus ikut terhapus via ON DELETE CASCADE.)
+DELETE FROM loading_history_reports d
+USING (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY lh.company_id, lh.date, lh.type
+           ORDER BY (SELECT COUNT(*) FROM photos_reports p WHERE p.history_id = lh.id) DESC, lh.id ASC
+         ) AS rn
+  FROM loading_history_reports lh
+) ranked
+WHERE d.id = ranked.id
+  AND ranked.rn > 1;
 
 -- Buat unique constraint (idempotent)
 DO $$
