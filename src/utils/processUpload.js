@@ -48,15 +48,10 @@ const adoptOwnHistory = async ({ companyId, date, type, pic }, resume) => {
 export const processUpload = async (
   { files, companyId, companyName, date, pic, type, catatan, crewIds = [] },
   onProgress,
-  resume = {},
-  onResumeChange = null
+  resume = {}
 ) => {
   const emit = (status, progress) => {
     try { onProgress?.(status, progress); } catch { /* abaikan */ }
-  };
-  // Dipanggil tiap `resume` berubah supaya antrean bisa menyimpannya (IndexedDB)
-  const touch = () => {
-    try { onResumeChange?.(resume); } catch { /* abaikan */ }
   };
 
   let totalOriginal = files.reduce((sum, p) => sum + (p.originalSize || p.file.size), 0);
@@ -104,7 +99,6 @@ export const processUpload = async (
       }
       completedPhotos = totalPhotos;
       resume.uploadedPhotos = uploadedPhotos; // simpan: retry tidak upload ulang
-      touch();
     }
     emit('uploading', 70);
 
@@ -127,14 +121,10 @@ export const processUpload = async (
       // (resume.historyId), lewati supaya retry tidak membuat baris baru.
       if (!resume.historyId) {
         const retrying = !!resume.historyAttemptedAt;
-        if (!resume.historyAttemptedAt) {
-          resume.historyAttemptedAt = Date.now();
-          touch(); // simpan SEBELUM request: kalau tab mati di tengah, retry tahu sudah pernah mencoba
-        }
+        if (!resume.historyAttemptedAt) resume.historyAttemptedAt = Date.now();
         try {
           const saved = await addLoadingHistory(historyData);
           resume.historyId = saved.id;
-          touch();
         } catch (err) {
           // Ambigu (jaringan lemot/putus) atau bentrok saat retry: bisa jadi baris
           // itu hasil request kita sendiri. Pakai ulang, jangan bikin dobel.
@@ -142,7 +132,6 @@ export const processUpload = async (
           const own = maybeOurs ? await adoptOwnHistory({ companyId, date, type, pic }, resume) : null;
           if (!own) throw err;
           resume.historyId = own.id;
-          touch();
         }
       }
 
@@ -188,7 +177,6 @@ export const processUpload = async (
         );
         resume.uploadedPhotos = null;
         resume.historyAttemptedAt = null;
-        touch();
       }
       throw dbError;
     }

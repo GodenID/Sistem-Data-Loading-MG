@@ -147,30 +147,18 @@ router.get('/errors/stats', async (req, res) => {
       conds.push(`error_type = $${values.length}`);
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    // Agregasi di SQL (dulu: SELECT * lalu hitung di JS)
-    const [byTypeR, trendR] = await Promise.all([
-      pool.query(
-        `SELECT error_type, COUNT(*)::int AS c,
-                COUNT(*) FILTER (WHERE COALESCE(resolved, FALSE) = FALSE)::int AS unresolved
-         FROM error_logs ${where} GROUP BY error_type`,
-        values
-      ),
-      pool.query(
-        `SELECT (created_at AT TIME ZONE 'UTC')::date::text AS d, COUNT(*)::int AS c
-         FROM error_logs ${where} GROUP BY d ORDER BY d ASC`,
-        values
-      ),
-    ]);
+    const { rows } = await pool.query(`SELECT * FROM error_logs ${where}`, values);
     const byType = {};
-    let total = 0;
+    const trendMap = {};
     let unresolved = 0;
-    byTypeR.rows.forEach((r) => {
-      byType[r.error_type] = r.c;
-      total += r.c;
-      unresolved += r.unresolved;
+    rows.forEach((err) => {
+      byType[err.error_type] = (byType[err.error_type] || 0) + 1;
+      const d = new Date(err.created_at).toISOString().split('T')[0];
+      trendMap[d] = (trendMap[d] || 0) + 1;
+      if (!err.resolved) unresolved += 1;
     });
-    const trend = trendR.rows.map((r) => ({ date: r.d, count: r.c }));
-    res.json({ total, byType, trend, unresolved });
+    const trend = Object.entries(trendMap).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
+    res.json({ total: rows.length, byType, trend, unresolved });
   } catch (e) {
     res.status(500).json({ error: 'Gagal ambil error stats' });
   }

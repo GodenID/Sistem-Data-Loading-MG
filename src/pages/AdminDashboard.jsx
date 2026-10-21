@@ -17,7 +17,7 @@ import {
   Database
 } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
-import { getCompaniesCount, getHistoryOverview } from '../utils/supabase';
+import { getCompanies, getLoadingHistory } from '../utils/supabase';
 import BackupButton from '../components/BackupButton';
 import RestoreBackup from '../components/RestoreBackup';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
@@ -77,21 +77,21 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { logout } = useAdmin();
   
-  const [totalClients, setTotalClients] = useState(0);
-  const [overview, setOverview] = useState(null);
+  const [companies, setCompanies] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Ringkasan dihitung di server (1 request ringan) — bukan tarik seluruh history
+  // Fetch data from Supabase
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [count, ov] = await Promise.all([
-          getCompaniesCount(),
-          getHistoryOverview()
+        const [companiesData, historyData] = await Promise.all([
+          getCompanies(),
+          getLoadingHistory()
         ]);
-        setTotalClients(count);
-        setOverview(ov);
+        setCompanies(companiesData);
+        setLoadingHistory(historyData);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -102,15 +102,29 @@ const AdminDashboard = () => {
     fetchData();
   }, []);
 
-  // Statistik
-  const totalLoading = overview?.loading ?? 0;
-  const totalPerawatan = overview?.perawatan ?? 0;
-  const totalRotations = overview?.total ?? 0;
-  const totalPhotos = overview?.media ?? 0;
-  const activeClients = overview?.activeClients ?? 0;
+  // Hitung statistik
+  const totalClients = companies.length;
+  const totalLoading = loadingHistory.filter(item => item.type === 'loading' || !item.type).length;
+  const totalPerawatan = loadingHistory.filter(item => item.type === 'perawatan').length;
+  const totalRotations = loadingHistory.length;
+  const totalPhotos = loadingHistory.reduce((acc, item) => acc + (item.photo_count || 0), 0);
+  
+  // Rotasi bulan ini
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const rotationsThisMonth = loadingHistory.filter(item => {
+    const itemDate = new Date(item.date);
+    return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+  }).length;
+
+  // Client aktif
+  const activeClientIds = new Set(loadingHistory.map(item => item.company_id));
+  const activeClients = activeClientIds.size;
 
   // Rotasi terbaru (5 terakhir)
-  const recentRotations = overview?.recent ?? [];
+  const recentRotations = [...loadingHistory]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 5);
 
 
 

@@ -74,26 +74,15 @@ router.get('/count', async (_req, res) => {
   }
 });
 
-// GET /api/companies/active?ids=1,2&since=2026-01-01&until=2026-01-31
-// ids opsional (kosong = semua perusahaan); until opsional (batas atas tanggal).
+// GET /api/companies/active?ids=1,2&since=2026-01-01
 router.get('/active', async (req, res) => {
   try {
     const ids = String(req.query.ids || '').split(',').map(Number).filter(Boolean).slice(0, 5000);
-    const { since, until } = req.query;
-    if (!since) return res.json([]);
-    const values = [since];
-    let where = 'date >= $1';
-    if (until) {
-      values.push(until);
-      where += ` AND date <= $${values.length}`;
-    }
-    if (ids.length) {
-      values.push(ids);
-      where += ` AND company_id = ANY($${values.length})`;
-    }
+    const since = req.query.since;
+    if (!ids.length || !since) return res.json([]);
     const { rows } = await pool.query(
-      `SELECT DISTINCT company_id FROM loading_history_reports WHERE ${where} LIMIT 5000`,
-      values
+      'SELECT DISTINCT company_id FROM loading_history_reports WHERE company_id = ANY($1) AND date >= $2 LIMIT 5000',
+      [ids, since]
     );
     res.json(rows.map((r) => r.company_id));
   } catch (e) {
