@@ -26,17 +26,24 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { getCompanies, deleteCompany, updateCompany, addCompany, getLoadingHistory } from '../utils/supabase';
+import { getCompanies, deleteCompany, updateCompany, addCompany, getCompanyIdsWithDocs, getCompanyStats, getLoadingHistory, getLoadingHistorySummary } from '../utils/supabase';
 import AppFooter from '../components/AppFooter';
 import { exportCompaniesToExcel } from '../utils/exportExcel';
 import { uploadCompanyLogo, deleteOldLogo } from '../utils/logoHandler';
 import { toast } from '../utils/toast';
 import * as XLSX from 'xlsx';
 
+// Tanggal lokal -> 'YYYY-MM-DD' (tanpa geser zona waktu seperti toISOString)
+const toYmd = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const AdminClients = () => {
   const navigate = useNavigate();
   const [companies, setCompanies] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState([]);
+  const [activeIds, setActiveIds] = useState(() => new Set());
+  const [companyStatsMap, setCompanyStatsMap] = useState({});
+  const [monthIds, setMonthIds] = useState(null);
+  const [monthDocCount, setMonthDocCount] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -85,17 +92,23 @@ const AdminClients = () => {
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
   const [importResults, setImportResults] = useState(null);
 
-  // Fetch data from Supabase
+  // Fetch data — agregasi dilakukan server (tidak lagi menarik seluruh history)
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [companiesData, historyData] = await Promise.all([
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        const [companiesData, activeData, statsData] = await Promise.all([
           getCompanies(),
-          getLoadingHistory()
+          getCompanyIdsWithDocs(toYmd(twoMonthsAgo)),
+          getCompanyStats()
         ]);
         setCompanies(companiesData);
-        setLoadingHistory(historyData);
+        setActiveIds(new Set(activeData));
+        setCompanyStatsMap(
+          Object.fromEntries((statsData || []).map(s => [s.companyId, s]))
+        );
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -106,20 +119,35 @@ const AdminClients = () => {
     fetchData();
   }, []);
 
+  // Filter bulan: ambil perusahaan yang punya dokumentasi di bulan terpilih
+  useEffect(() => {
+    if (!enableMonthFilter) {
+      setMonthIds(null);
+      setMonthDocCount(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const from = toYmd(new Date(filterYear, filterMonth, 1));
+    const to = toYmd(new Date(filterYear, filterMonth + 1, 0));
+    setMonthDocCount(null);
+    Promise.all([
+      getCompanyIdsWithDocs(from, to),
+      getLoadingHistorySummary({ dateFrom: from, dateTo: to })
+    ])
+      .then(([ids, summary]) => {
+        if (cancelled) return;
+        setMonthIds(new Set(ids));
+        setMonthDocCount(summary?.total ?? 0);
+      })
+      .catch(err => console.error('Error fetching month filter:', err));
+    return () => { cancelled = true; };
+  }, [enableMonthFilter, filterMonth, filterYear]);
+
   // Filter companies
-  const clientsWithStatus = useMemo(() => {
-    const twoMonthsAgo = new Date();
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-
-    return companies.map(company => {
-      const latestDoc = [...loadingHistory]
-        .filter(h => h.company_id === company.id)
-        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-
-      const isActive = !!latestDoc && new Date(latestDoc.date) >= twoMonthsAgo;
-      return { ...company, isActive };
-    });
-  }, [companies, loadingHistory]);
+  const clientsWithStatus = useMemo(
+    () => companies.map(company => ({ ...company, isActive: activeIds.has(company.id) })),
+    [companies, activeIds]
+  );
 
   const filteredCompanies = useMemo(() => {
     let result = clientsWithStatus;
@@ -140,29 +168,19 @@ const AdminClients = () => {
     }
 
     // Month filter: only show clients with documentation in selected month
-    if (enableMonthFilter) {
-      const monthStart = new Date(filterYear, filterMonth, 1);
-      const monthEnd = new Date(filterYear, filterMonth + 1, 0);
-      result = result.filter(company => {
-        const docsInMonth = loadingHistory.filter(h =>
-          h.company_id === company.id &&
-          new Date(h.date) >= monthStart &&
-          new Date(h.date) <= monthEnd
-        );
-        return docsInMonth.length > 0;
-      });
+    if (enableMonthFilter && monthIds) {
+      result = result.filter(company => monthIds.has(company.id));
     }
 
     return result;
-  }, [clientsWithStatus, searchQuery, statusFilter, loadingHistory, filterMonth, filterYear, enableMonthFilter]);
+  }, [clientsWithStatus, searchQuery, statusFilter, monthIds, enableMonthFilter]);
 
   // Hitung statistik per client
   const getClientStats = (companyId) => {
-    const rotations = loadingHistory.filter(item => item.company_id === companyId);
-    const totalPhotos = rotations.reduce((acc, item) => acc + (item.photo_count || 0), 0);
+    const s = companyStatsMap[companyId];
     return {
-      rotationCount: rotations.length,
-      totalPhotos
+      rotationCount: s?.rotationCount ?? 0,
+      totalPhotos: s?.totalPhotos ?? 0
     };
   };
 
@@ -355,7 +373,9 @@ const AdminClients = () => {
     setExportStatus({ type: 'loading', message: 'Mempersiapkan export...' });
 
     try {
-      const result = await exportCompaniesToExcel(companies, loadingHistory);
+      // Riwayat lengkap hanya ditarik saat export (bukan saat halaman dibuka)
+      const history = await getLoadingHistory();
+      const result = await exportCompaniesToExcel(companies, history);
       setExportStatus({
         type: 'success',
         message: `Berhasil export ${result.count} client ke ${result.filename}`
@@ -729,10 +749,7 @@ const AdminClients = () => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <span className="text-xs text-gray-400">
-                {loadingHistory.filter(h => {
-                  const d = new Date(h.date);
-                  return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
-                }).length} dokumentasi
+                {monthDocCount ?? '…'} dokumentasi
               </span>
             </>
           )}

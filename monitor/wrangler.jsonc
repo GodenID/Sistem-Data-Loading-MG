@@ -1,0 +1,15 @@
+{
+  // Uptime monitor MG Report — cek API/DB & frontend tiap menit, alert ke Telegram.
+  // Secret (jangan di file ini):  wrangler secret put TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+  "name": "mg-uptime-monitor",
+  "main": "src/index.js",
+  "compatibility_date": "2025-09-01",
+  "triggers": { "crons": ["* * * * *"] },
+  "kv_namespaces": [{ "binding": "STATE" }],
+  "vars": {
+    "API_URL": "https://api-data-loading.prasastigroup.id",
+    "WEB_URL": "https://data-loading.prasastigroup.id",
+    "FAIL_THRESHOLD": "2"
+  },
+  "observability": { "enabled": true }
+}

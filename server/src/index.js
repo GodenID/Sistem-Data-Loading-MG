@@ -34,12 +34,24 @@ app.use(
 );
 app.use(express.json({ limit: '2mb' }));
 
+// Health check dipakai Coolify (healthcheck) dan uptime monitor eksternal
+// (monitor/ — Cloudflare Worker). 200 = sehat, 503 = DB tidak terjangkau/lambat.
 app.get('/health', async (_req, res) => {
+  const t0 = Date.now();
+  let timer;
   try {
-    await pool.query('SELECT 1');
-    res.json({ ok: true, db: 'up' });
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('db timeout'), { code: 'DB_TIMEOUT' })), 4000);
+      }),
+    ]);
+    res.json({ ok: true, db: 'up', ms: Date.now() - t0, uptime: Math.round(process.uptime()) });
   } catch (e) {
-    res.status(500).json({ ok: false, db: 'down', error: e.message });
+    console.error('health: DB tidak sehat:', e.message);
+    res.status(503).json({ ok: false, db: 'down', error: e.code || 'db_error', ms: Date.now() - t0 });
+  } finally {
+    clearTimeout(timer);
   }
 });
 

@@ -45,9 +45,25 @@ export const getCompaniesCount = async () => {
   return res.count ?? 0;
 };
 
-export const getActiveCompanyIds = async (companyIds = [], sinceDate) => {
+export const getActiveCompanyIds = async (companyIds = [], sinceDate, untilDate) => {
   if (!companyIds.length || !sinceDate) return [];
-  return apiGet('/api/companies/active', { ids: companyIds.join(','), since: sinceDate });
+  return apiGet('/api/companies/active', { ids: companyIds.join(','), since: sinceDate, until: untilDate });
+};
+
+// Semua perusahaan yang punya dokumentasi pada rentang tanggal (tanpa kirim daftar id)
+export const getCompanyIdsWithDocs = async (sinceDate, untilDate) => {
+  if (!sinceDate) return [];
+  return apiGet('/api/companies/active', { since: sinceDate, until: untilDate });
+};
+
+// Ringkasan dashboard admin (dihitung di server, bukan tarik seluruh history)
+export const getHistoryOverview = async () => {
+  return apiGet('/api/history/overview');
+};
+
+// Jumlah dokumentasi & media per perusahaan: [{ companyId, rotationCount, totalPhotos }]
+export const getCompanyStats = async () => {
+  return apiGet('/api/history/company-stats');
 };
 
 export const addCompany = async (company) => {

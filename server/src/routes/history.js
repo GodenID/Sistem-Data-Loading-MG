@@ -4,6 +4,9 @@ const { notifyNewUpload } = require('../notify');
 
 const router = express.Router();
 
+// Zona waktu untuk agregasi per jam / "bulan ini" (server jalan di UTC)
+const APP_TZ = process.env.APP_TIMEZONE || 'Asia/Jakarta';
+
 const SORT_MAP = { date: 'lh.date', pic: 'lh.pic', photos: 'lh.photo_count', created: 'lh.created_at' };
 
 function buildHistoryWhere(q, values) {
@@ -161,18 +164,18 @@ router.get('/summary', async (req, res) => {
     const w3 = buildHistoryWhere({ ...req.query, type: 'perawatan' }, v3);
     const v4 = [];
     const w4 = buildHistoryWhere(req.query, v4);
+    // Jumlah media dihitung di SQL (dulu: tarik baris lalu jumlahkan di JS dengan LIMIT 10000)
     const [total, loading, perawatan, media] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int AS c FROM loading_history_reports lh ${w1}`, v1),
       pool.query(`SELECT COUNT(*)::int AS c FROM loading_history_reports lh ${w2}`, v2),
       pool.query(`SELECT COUNT(*)::int AS c FROM loading_history_reports lh ${w3}`, v3),
-      pool.query(`SELECT photo_count FROM loading_history_reports lh ${w4} LIMIT 10000`, v4),
+      pool.query(`SELECT COALESCE(SUM(lh.photo_count), 0)::int AS c FROM loading_history_reports lh ${w4}`, v4),
     ]);
-    const mediaCount = media.rows.reduce((a, r) => a + (r.photo_count || 0), 0);
     res.json({
       total: total.rows[0].c,
       loading: loading.rows[0].c,
       perawatan: perawatan.rows[0].c,
-      media: mediaCount,
+      media: media.rows[0].c,
     });
   } catch (e) {
     res.status(500).json({ error: 'Gagal ambil summary' });
@@ -180,6 +183,7 @@ router.get('/summary', async (req, res) => {
 });
 
 // GET /api/history/heatmap?days=90
+// Agregasi di SQL (dulu: tarik maks 5000 baris lalu hitung di JS -> terpotong saat data banyak)
 router.get('/heatmap', async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 90));
@@ -187,20 +191,23 @@ router.get('/heatmap', async (req, res) => {
     start.setDate(start.getDate() - (days - 1));
     const startStr = start.toISOString().split('T')[0];
     const { rows } = await pool.query(
-      'SELECT date, type, photo_count FROM loading_history_reports WHERE date >= $1 ORDER BY date ASC LIMIT 5000',
+      `SELECT date::text AS d, type, COUNT(*)::int AS cnt, COALESCE(SUM(photo_count), 0)::int AS media
+       FROM loading_history_reports WHERE date >= $1
+       GROUP BY date, type ORDER BY date ASC`,
       [startStr]
     );
     const map = {};
+    let total = 0;
     rows.forEach((row) => {
-      const key = new Date(row.date).toISOString().split('T')[0];
-      if (!map[key]) map[key] = { loading: 0, perawatan: 0, media: 0, total: 0 };
-      const d = map[key];
-      if (row.type === 'perawatan') d.perawatan += 1;
-      else d.loading += 1;
-      d.media += row.photo_count || 0;
-      d.total += 1;
+      if (!map[row.d]) map[row.d] = { loading: 0, perawatan: 0, media: 0, total: 0 };
+      const d = map[row.d];
+      if (row.type === 'perawatan') d.perawatan += row.cnt;
+      else d.loading += row.cnt;
+      d.media += row.media;
+      d.total += row.cnt;
+      total += row.cnt;
     });
-    res.json({ map, total: rows.length, startStr });
+    res.json({ map, total, startStr });
   } catch (e) {
     res.status(500).json({ error: 'Gagal ambil heatmap' });
   }
@@ -285,29 +292,35 @@ router.get('/top-uploaders', async (req, res) => {
       conds.push(`lh.date <= $${values.length}`);
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    values.push(limit);
     const { rows } = await pool.query(
-      `SELECT lh.company_id, c.name AS company_name, lh.photo_count
-       FROM loading_history_reports lh LEFT JOIN companies_reports c ON c.id = lh.company_id ${where}`,
+      `SELECT lh.company_id, MAX(c.name) AS company_name,
+              COUNT(*)::int AS upload_count, COALESCE(SUM(lh.photo_count), 0)::int AS total_photos
+       FROM loading_history_reports lh LEFT JOIN companies_reports c ON c.id = lh.company_id ${where}
+       GROUP BY lh.company_id
+       ORDER BY upload_count DESC, lh.company_id ASC
+       LIMIT $${values.length}`,
       values
     );
-    const grouped = {};
-    rows.forEach((r) => {
-      if (!grouped[r.company_id]) {
-        grouped[r.company_id] = { companyId: r.company_id, companyName: r.company_name || 'Unknown', uploadCount: 0, totalPhotos: 0 };
-      }
-      grouped[r.company_id].uploadCount += 1;
-      grouped[r.company_id].totalPhotos += r.photo_count || 0;
-    });
-    res.json(Object.values(grouped).sort((a, b) => b.uploadCount - a.uploadCount).slice(0, limit));
+    res.json(
+      rows.map((r) => ({
+        companyId: r.company_id,
+        companyName: r.company_name || 'Unknown',
+        uploadCount: r.upload_count,
+        totalPhotos: r.total_photos,
+      }))
+    );
   } catch (e) {
     res.status(500).json({ error: 'Gagal ambil top uploaders' });
   }
 });
 
 // GET /api/history/hourly?from=&to=
+// Jam dihitung di SQL pada zona waktu APP_TIMEZONE (default Asia/Jakarta);
+// dulu pakai jam server (UTC) sehingga bergeser 7 jam.
 router.get('/hourly', async (req, res) => {
   try {
-    const values = [];
+    const values = [APP_TZ];
     const conds = [];
     if (req.query.from) {
       values.push(req.query.from);
@@ -318,14 +331,69 @@ router.get('/hourly', async (req, res) => {
       conds.push(`date <= $${values.length}`);
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    const { rows } = await pool.query(`SELECT created_at FROM loading_history_reports ${where}`, values);
+    const { rows } = await pool.query(
+      `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE $1)::int AS h, COUNT(*)::int AS c
+       FROM loading_history_reports ${where} GROUP BY h`,
+      values
+    );
     const hours = new Array(24).fill(0);
     rows.forEach((r) => {
-      hours[new Date(r.created_at).getHours()] += 1;
+      hours[r.h] = r.c;
     });
     res.json(hours.map((count, hour) => ({ hour: `${String(hour).padStart(2, '0')}:00`, count })));
   } catch (e) {
     res.status(500).json({ error: 'Gagal ambil hourly' });
+  }
+});
+
+// GET /api/history/overview — ringkasan dashboard admin dalam 1 request
+// (dulu frontend menarik SELURUH history lalu menghitung sendiri).
+router.get('/overview', async (_req, res) => {
+  try {
+    const [agg, recent] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE type = 'loading' OR type IS NULL)::int AS loading,
+                COUNT(*) FILTER (WHERE type = 'perawatan')::int AS perawatan,
+                COALESCE(SUM(photo_count), 0)::int AS media,
+                COUNT(*) FILTER (WHERE date >= date_trunc('month', (NOW() AT TIME ZONE $1)::date)
+                                   AND date < date_trunc('month', (NOW() AT TIME ZONE $1)::date) + INTERVAL '1 month')::int AS this_month,
+                COUNT(DISTINCT company_id)::int AS active_clients
+         FROM loading_history_reports`,
+        [APP_TZ]
+      ),
+      pool.query(
+        `SELECT lh.*, c.name AS company_name, c.sales_name AS company_sales, c.slug AS company_slug
+         FROM loading_history_reports lh LEFT JOIN companies_reports c ON c.id = lh.company_id
+         ORDER BY lh.created_at DESC LIMIT 5`
+      ),
+    ]);
+    const a = agg.rows[0];
+    res.json({
+      total: a.total,
+      loading: a.loading,
+      perawatan: a.perawatan,
+      media: a.media,
+      thisMonth: a.this_month,
+      activeClients: a.active_clients,
+      recent: recent.rows.map(mapRow),
+    });
+  } catch (e) {
+    console.error('GET /history/overview:', e.message);
+    res.status(500).json({ error: 'Gagal ambil overview' });
+  }
+});
+
+// GET /api/history/company-stats — jumlah dokumentasi & media per perusahaan
+router.get('/company-stats', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT company_id, COUNT(*)::int AS rotation_count, COALESCE(SUM(photo_count), 0)::int AS total_photos
+       FROM loading_history_reports GROUP BY company_id`
+    );
+    res.json(rows.map((r) => ({ companyId: r.company_id, rotationCount: r.rotation_count, totalPhotos: r.total_photos })));
+  } catch (e) {
+    res.status(500).json({ error: 'Gagal ambil statistik perusahaan' });
   }
 });
 
